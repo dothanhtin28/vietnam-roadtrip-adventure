@@ -1,59 +1,26 @@
 <!doctype html>
 <html lang="vi"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f5efdf">
-<title>Đường Về Phía Gió · Chuyến 01</title>
-<style>
-*{box-sizing:border-box} :root{font-family:system-ui,sans-serif;background:#f5efdf;color:#252d22}
-body{margin:0} .wrap{max-width:1120px;margin:auto;padding:20px clamp(12px,4vw,38px) 32px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #b3ac93;padding:0 0 13px}
-.tag{font-size:.7rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#56614e}
-.brand{font-family:Georgia,serif;font-weight:bold;font-size:clamp(1.15rem,4vw,1.5rem)}
-.grid{display:grid;grid-template-columns:1.75fr 1fr;gap:16px;margin-top:16px;align-items:start}
-.panel{background:#fff9eb;border:1px solid #c4b99c;border-radius:16px;overflow:hidden}
-.scene{position:relative;isolation:isolate;display:flex;align-items:end;aspect-ratio:2/1;min-height:190px;overflow:hidden;background:#426756;color:#fff7e1}
-.scene svg{position:absolute;inset:0;width:100%;height:100%;z-index:-2}
-.scene::after{content:"";position:absolute;inset:45% 0 0;background:linear-gradient(transparent,#17281ed9);z-index:-1}
-.title{padding:clamp(12px,4vw,26px)} .title .tag{color:#f3e4b8}
-h1{font-family:Georgia,serif;font-size:clamp(1.8rem,5.1vw,3.35rem);margin:.15em 0 0;line-height:1}
-.content,.side{padding:16px clamp(12px,3vw,21px)}
-.status{display:flex;gap:8px;flex-wrap:wrap}
-.status span{background:#eae8d6;border-radius:999px;padding:4px 9px;font-size:.78rem;color:#344337}
-h2,h3{font-family:Georgia,serif;margin:.8rem 0 .35rem} h2{font-size:1.45rem} h3{font-size:1.17rem}
-p{line-height:1.5;margin:.55rem 0;color:#475343}
-.choices{display:grid;gap:8px;margin-top:12px}
-button{font:inherit;cursor:pointer}
-.choice{min-height:44px;text-align:left;background:#edf0de;border:1px solid #9ba982;color:#202d21;border-radius:10px;padding:10px 12px}
-.choice:first-child{background:#244d3e;color:#fff9e7;border-color:#244d3e}
-.choice:not(:disabled):hover{filter:brightness(.94)}
-.choice small{opacity:.88;display:block;margin-top:3px;line-height:1.35}
-.choice:disabled{opacity:.52;cursor:not-allowed}
-button:focus-visible,summary:focus-visible{outline:3px solid #a33b14;outline-offset:3px}
-.note{border-left:3px solid #ba692d;padding-left:8px;font-size:.88rem}
-.map{display:block;width:100%;margin:8px auto 0;max-height:270px;background:#ecebd6;border-radius:11px}
-.legend{font-size:.74rem}
-details{border-top:1px solid #d6cbb0;margin-top:14px;padding-top:12px}
-summary{font-weight:750;cursor:pointer}
-ul{padding-left:18px;margin-bottom:0} li{margin:.5rem 0;color:#485341;font-size:.88rem}
-.reset{background:none;border:0;color:#435740;text-decoration:underline;padding:10px 3px}
-footer{margin-top:12px;font-size:.76rem;color:#55614c}
-@media(max-width:700px){.grid{grid-template-columns:1fr}.side{display:grid}.map{max-width:360px}.scene{aspect-ratio:1.75/1}}
-</style></head>
-<body><main class="wrap">
-<header class="top"><span class="brand">Đường Về Phía Gió</span><span class="tag">01 / Hà Giang</span></header>
-<div class="grid">
-<article class="panel">
-<div class="scene"><svg id="scenery" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg><div class="title"><div class="tag" id="km"></div><h1 id="title"></h1></div></div>
-<div class="content">
-<div class="status" aria-label="Tình trạng chuyến đi"><span id="time"></span><span id="fuel"></span><span id="energy"></span></div>
-<h2 id="event" tabindex="-1"></h2><p id="story"></p>
-<div class="choices" id="choices"></div><p id="result" class="note" role="status" hidden></p>
-</div></article>
-<aside class="panel side"><div class="tag">Bản đồ hành trình</div><svg id="map" class="map" viewBox="0 0 310 205" role="img" aria-label="Sơ đồ các điểm dừng"></svg>
-<p class="legend">● Đang ở &nbsp; ○ Chưa đến<br>Sơ đồ minh họa, không dùng để dẫn đường.</p>
-<details id="journal"><summary id="journal-title">Sổ tay · 0 kỷ niệm</summary><ul id="entries"></ul></details>
-<button class="reset" id="reset" hidden>Chơi chuyến mới</button>
-</aside></div>
-<footer>Game kể chuyện · Tình huống hư cấu dựa trên địa danh thật · Tiến độ lưu trên trình duyệt.</footer>
-</main>
-<script src="game.js"></script></body></html>
+<meta name="theme-color" content="#172b25">
+<title>Đường Về Phía Gió | Phiêu lưu 2D</title>
+<link rel="stylesheet" href="ride.css">
+</head><body><main>
+<header><div><p class="eyebrow">NHẬT KÝ ĐƯỜNG XA / CHUYẾN 01</p><h1>Đường Về Phía Gió</h1></div><a href="story/index.html">Bản kể chuyện ↗</a></header>
+<section class="game" aria-label="Chặng phượt 2D">
+<div class="world">
+<canvas id="world" width="1000" height="500" aria-label="Nhân vật phượt qua ruộng lúa, đồi và đèo núi">Game yêu cầu trình duyệt hỗ trợ Canvas.</canvas>
+<div class="hud"><div class="district"><span>ĐANG Ở</span><strong id="district">Đồng bằng</strong></div><div class="readout"><span id="mode">Đi bộ</span><span id="photos">0 / 3 bưu thiếp</span></div></div>
+<div class="banner" id="banner"><p class="eyebrow">TỪ CÁNH ĐỒNG LÊN ĐỈNH ĐÈO</p><h2>Một chuyến đi không cần vội.</h2><p>Đi bộ qua bùn, đạp xe trên đường khô và ghé ba điểm ngắm cảnh.</p><button id="start" type="button">Lên đường <b>→</b></button></div>
+<div id="hint" class="hint" role="status" hidden></div>
+</div>
+<div class="route" aria-label="Tiến độ hành trình"><div class="track"><i id="progress"></i></div><div class="stops"><span>01 · Đồng bằng</span><span>02 · Đồi chè</span><span>03 · Đèo đá</span></div></div>
+</section>
+<section class="controls" aria-label="Điều khiển">
+<div class="key-group"><button type="button" data-hold="left" aria-label="Đi trái">◀</button><button type="button" data-hold="right" aria-label="Đi phải">▶</button><span>Di chuyển <kbd>A</kbd> <kbd>D</kbd></span></div>
+<div class="key-group"><button type="button" data-action="jump">Nhảy</button><span><kbd>Space</kbd></span></div>
+<div class="key-group"><button type="button" data-action="mount">Đổi xe</button><span><kbd>E</kbd></span></div>
+<div class="key-group"><button type="button" data-action="photo">Ngắm cảnh</button><span><kbd>F</kbd></span></div>
+<button type="button" id="reset">Chơi lại</button>
+</section>
+<footer>Địa hình hư cấu, lấy cảm hứng từ cảnh quan Việt Nam. Không phải bản đồ dẫn đường.</footer>
+</main><script src="ride.js"></script></body></html>
