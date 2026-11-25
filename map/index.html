@@ -7,12 +7,18 @@
 <div><span>MÁU</span><meter id="health" min="0" max="100"></meter></div><div><span>NO BỤNG</span><meter id="food" min="0" max="100"></meter></div><div><span>ĐỦ NƯỚC</span><meter id="water" min="0" max="100"></meter></div><div><span>THỂ LỰC</span><meter id="energy" min="0" max="100"></meter></div><div><span>VÍ TIỀN</span><b id="money"></b></div><div><span>GIỜ TRONG GAME</span><b id="clock"></b></div></div>
 <div class="layout">
 <section class="mapbox" aria-label="Bản đồ hành trình">
-<div class="map-top"><span class="eyebrow">CAO NGUYÊN ĐÁ · HÀ GIANG</span><span class="badge" id="mode">Đi bộ</span></div>
+<div class="map-top"><span class="eyebrow">HÀ GIANG</span><div class="view-tabs" aria-label="Góc nhìn"><button id="map-view" aria-pressed="true">Bản đồ</button><button id="scene-view" aria-pressed="false">3D</button></div><span class="badge" id="mode">Đi bộ</span></div>
 <div id="viewport" tabindex="0" aria-label="Kéo để xem bản đồ, cuộn chuột để zoom">
 <div id="world"><svg id="terrain" viewBox="0 0 1400 1020" aria-hidden="true"></svg><div id="pins"></div><div id="marker" aria-label="Vị trí người chơi" role="img"></div></div>
 </div>
-<div class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
-<div class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
+<div id="scene-panel" hidden>
+<canvas id="canvas3d" aria-label="Góc nhìn 3D sau nhân vật; kéo ngang để xoay, phím trái phải hoặc nút xoay" tabindex="0"></canvas>
+<button id="mini" title="Mở bản đồ"><svg id="mini-route" viewBox="135 120 1125 800" role="img" aria-label="Vị trí trên cung đường"></svg></button>
+<div class="scene-controls"><button id="orbit-left" aria-label="Xoay camera trái">↶</button><button id="orbit-reset" aria-label="Về góc nhìn sau lưng">◎</button><button id="orbit-right" aria-label="Xoay camera phải">↷</button><button id="pause-travel" disabled>Tạm dừng</button></div>
+</div>
+<div id="pace" class="pace" aria-label="Tốc độ, độ dốc và thể trạng"><strong id="pace-speed">Đang dừng</strong><span id="pace-grade"></span><span id="pace-shape"></span></div>
+<div id="map-nav" class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
+<div id="map-caption" class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
 </section>
 <aside><div class="card">
 <div class="eyebrow" id="place-tag">ĐIỂM DỪNG</div><h2 id="place"></h2>
@@ -21,4 +27,4 @@
 </div><div class="card notebook"><div class="eyebrow">TÚI ĐỒ &amp; NHẬT KÝ</div><div id="bag"></div><div id="mission"></div><p id="message" role="status"></p><details><summary>Các điểm trên tuyến</summary><div id="directory"></div></details><button id="reset" class="subtle">Bắt đầu lại</button></div></aside>
 </div>
 <footer>Kéo hoặc chụm hai ngón để xem đường. Chọn ghim, rồi bấm Đi tới đây. Tuyến và dịch vụ được rút gọn, hư cấu cho game. Ảnh có ghi tác giả và giấy phép.</footer>
-</main><script src="data.js"></script><script src="engine.js"></script><script src="map.js"></script></body></html>
+</main><script src="data.js"></script><script src="engine.js"></script><script src="scene3d.js"></script><script src="map.js"></script></body></html>

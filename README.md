@@ -2,7 +2,13 @@
 
 Mở `index.html` sau khi pull. Bản mặc định là chuyến du mục trên **bản đồ nhìn từ trên xuống**. Game chạy bằng HTML/CSS/JS, không cần cài thư viện. Bản đồ chơi được ngoại tuyến; ảnh thật trên Wikimedia Commons cần mạng.
 
-## Chơi bản đồ
+## Bản đồ và góc nhìn 3D
+- Hai góc nhìn dùng chung vị trí, chuyến đi, túi đồ và tiến độ. Chọn điểm đích trên bản đồ và bấm **Đi tới đây**; mặc định có thể xem chuyến đi từ sau lưng nhân vật trong 3D. Bấm **Bản đồ** hoặc bản đồ nhỏ để quay về xem tuyến.
+- Kéo ngang hoặc dùng ↶ / ↷ để xoay máy quay. Nút **Tạm dừng** dừng ở giữa đường để ngắm cảnh, **Đi tiếp** cho nhân vật tiếp tục trên tuyến. Đây chưa phải chế độ lái tự do ngoài đường đã chọn.
+- Độ dốc lấy từ cùng mặt cắt độ cao dùng để vẽ đường 3D. Lên dốc làm chậm, xuống dốc có thể nhanh hơn. Máu thấp, đói, khát và mệt giảm tốc độ theo thời gian thực. HUD hiện độ dốc và nhịp di chuyển so với tốc độ cơ bản của phương tiện. Thời gian đến phản ánh các yếu tố này.
+- Cảnh 3D low-poly mô phỏng dọc tuyến, không dùng dữ liệu địa hình thật hay Google Maps; chạy ngoại tuyến bằng Canvas.
+
+## Hoạt động dọc đường
 - Kéo để dời bản đồ. Cuộn chuột, chụm hai ngón hoặc dùng nút +/− để zoom. Nút ◎ về vị trí hiện tại, ▣ mở toàn tuyến.
 - Chọn ghim rồi bấm **Đi tới đây**. Người chơi di chuyển theo đường; các chặng tiêu hao độ no, nước uống và thể lực. Dừng nghỉ, mua cơm nước, phụ quán hoặc câu cá và đem bán ở chợ Đồng Văn.
 - Đến ba ghim máy ảnh để check-in. Có thể làm quen chó và mèo bằng cách chờ rồi đặt thức ăn xuống. Thú tự đi theo nếu đã quen.
@@ -20,4 +26,4 @@ Mở `index.html` sau khi pull. Bản mặc định là chuyến du mục trên 
 - `story/index.html`: kể chuyện theo lựa chọn.
 
 ## Kiểm thử
-Chạy `node test/map-smoke.cjs` và `node test/ride-smoke.cjs`.
+Chạy `node test/map-smoke.cjs`, `node test/scene3d-smoke.cjs` và `node test/ride-smoke.cjs`.

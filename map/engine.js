@@ -21,6 +21,59 @@ function pointAt(path,d){
  }
  return path.at(-1);
 }
+// Elevations are game-world units, not surveyed terrain. Compute one profile so
+// the road mesh, speed simulation and grade indicator agree, in both directions.
+const elevations=[12,17,38,66,82,119,138,114];
+const bound=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const routeProfile=[];
+for(let i=0;i<roads.length;i++){
+ const points=path(i,i+1), dist=length(points);let d=0;
+ routeProfile.push(points.map(([x,z],k)=>{
+  if(k)d+=Math.hypot(x-points[k-1][0],z-points[k-1][1]);
+  const t=d/dist,h=elevations[i]+(elevations[i+1]-elevations[i])*t+(i%2?3.3:2.3)*Math.sin(2*Math.PI*t);
+  return {x,z,h};
+ }));
+}
+function profile(from,to){
+ const dir=Math.sign(to-from), out=[];
+ for(let i=from;i!==to;i+=dir){
+  const row=routeProfile[Math.min(i,i+dir)], oriented=dir>0?row:[...row].reverse();
+  out.push(...(out.length?oriented.slice(1):oriented));
+ }
+ if(!out.length){const {x,y:z}=places[from];out.push({x,z,h:elevations[from]});}
+ let d=0;
+ return out.map((p,i)=>{if(i)d+=Math.hypot(p.x-out[i-1].x,p.z-out[i-1].z);return {...p,d};});
+}
+function sample(profile,d){
+ if(d<=0)return {...profile[0]};
+ for(let i=1;i<profile.length;i++){
+  const a=profile[i-1],b=profile[i];
+  if(d<=b.d){const t=(d-a.d)/(b.d-a.d);return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,h:a.h+(b.h-a.h)*t,d};}
+ }
+ return {...profile.at(-1)};
+}
+function grade(profile,d){
+ const a=sample(profile,d-8),b=sample(profile,d+8);
+ return b.d>a.d?(b.h-a.h)/(b.d-a.d):0;
+}
+function condition(s,plan,d,damage=0){
+ const f=plan.distance?bound(d/plan.distance,0,1):0;
+ return {food:Math.max(0,s.food-plan.food*f),water:Math.max(0,s.water-plan.water*f),energy:Math.max(0,s.energy-plan.energy*f),health:Math.max(0,s.health-damage)};
+}
+function pace(plan,d,s,damage=0){
+ const slope=grade(plan.profile,d),v=condition(s,plan,d,damage);
+ const loss=(n,threshold,weight)=>bound((threshold-n)/threshold,0,1)*weight;
+ const needs=1-loss(v.health,95,.32)-loss(v.food,72,.23)-loss(v.water,80,.28)-loss(v.energy,85,.16);
+ const motor=(plan.mode==='car'||plan.mode==='moto');
+ const gradeFactor=bound(slope>0?1/(1+slope*(motor?1.65:plan.mode==='bike'?5.2:3.6)):1-slope*(motor?.7:1.55),.40,1.24);
+ return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*Math.max(.26,needs)};
+}
+function eta(plan,s){
+ if(!plan.distance)return 0;
+ const samples=Math.max(4,Math.ceil(plan.distance/18));let duration=0;
+ for(let i=0;i<samples;i++)duration+=plan.minutes/samples*plan.speed/pace(plan,(i+.5)*plan.distance/samples,s).speed;
+ return Math.ceil(duration);
+}
 function trip(from,to,mode){
  const points=path(from,to), distance=length(points);
  let weighted=0, after=0;const hazards=[];
@@ -31,15 +84,15 @@ function trip(from,to,mode){
   after+=len;weighted+=len*leg.slope;
  }
  const v=modes[mode]||modes.walk, motor=v.fuel>0;
- return {points,distance,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(weighted/v.time),speed:v.speed,hazards,impact:v.impact};
+ return {points,profile:profile(from,to),mode,distance,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(weighted/v.time),speed:v.speed,hazards,impact:v.impact};
 }
 function apply(s,{food=0,water=0,energy=0,health=0,minutes=0}){
  s.food=clamp(s.food+food);s.water=clamp(s.water+water);s.energy=clamp(s.energy+energy);s.health=clamp(s.health+health);s.clock+=minutes;
 }
 const canTravel=(s,t)=>s.food>=t.food&&s.water>=t.water&&s.energy>=t.energy&&s.money>=t.fuel&&s.health>0;
-function arrive(s,to,t,extra=0,damage=0){
+function arrive(s,to,t,extra=0,damage=0,roadMinutes=t.minutes){
  if(!canTravel(s,t)||damage>=s.health)return false;
- apply(s,{food:-t.food,water:-t.water,energy:-t.energy,health:-damage,minutes:t.minutes+extra});s.money-=t.fuel;s.at=to;return true;
+ apply(s,{food:-t.food,water:-t.water,energy:-t.energy,health:-damage,minutes:Math.ceil(roadMinutes)+extra});s.money-=t.fuel;s.at=to;return true;
 }
 function buyVehicle(s,id){
  const v=modes[id];
@@ -91,5 +144,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,path,length,pointAt,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue};
+return {fresh,time,day,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue};
 })();

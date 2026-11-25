@@ -45,8 +45,8 @@ class Element {
  setPointerCapture(){}
 }
 const nodes=new Map(),get=k=>{if(!nodes.has(k))nodes.set(k,new Element());return nodes.get(k);};
-let now=0,frame;const saves=new Map();
-Object.assign(c,{window:new Element(),localStorage:{getItem:k=>saves.get(k),setItem:(k,v)=>saves.set(k,v)},document:{getElementById:get,createElement:()=>new Element(),createTextNode:t=>t},performance:{now:()=>now},matchMedia:()=>({matches:false}),requestAnimationFrame:f=>frame=f,confirm:()=>true});
+let now=0,frame,sceneFrame;const saves=new Map();
+Object.assign(c,{TripScene3D:{attach:()=>({reset(){},render(v){sceneFrame=v;}})},window:new Element(),localStorage:{getItem:k=>saves.get(k),setItem:(k,v)=>saves.set(k,v)},document:{getElementById:get,createElement:()=>new Element(),createTextNode:t=>t},performance:{now:()=>now},matchMedia:()=>({matches:false}),requestAnimationFrame:f=>frame=f,confirm:()=>true});
 vm.runInContext(code('map.js'),c);
 const act=(re)=>{const b=get('actions').children.find(b=>re.test(b.textContent));assert(b,String(re));b.click();};
 const tick=n=>{for(let i=0;i<n;i++)frame(now+=16.67);};
@@ -63,7 +63,14 @@ const beforePinch=get('zoom').textContent;
 viewport.event('pointermove',{pointerId:2,clientX:410,clientY:180,pointerType:'touch'});
 assert.notEqual(get('zoom').textContent,beforePinch);
 viewport.event('pointerup',{pointerId:1});viewport.event('pointerup',{pointerId:2});
-travel(1);act(/^Thả câu/);tick(85);act(/^Giật/);assert.match(get('message').textContent,/2 cá/);
+select(1);act(/^Đi tới/);tick(40);
+assert.equal(get('scene-panel').hidden,false);assert(sceneFrame.d>0);
+get('pause-travel').click();tick(6);const atPause=sceneFrame.d;tick(45);
+assert.equal(sceneFrame.d,atPause);
+get('map-view').click();assert.equal(get('scene-panel').hidden,true);
+get('scene-view').click();get('pause-travel').click();tick(900);
+assert.equal(get('place').textContent,'Bến sông Lô');
+act(/^Thả câu/);tick(85);act(/^Giật/);assert.match(get('message').textContent,/2 cá/);
 travel(2);act(/^Ngồi yên/);act(/^Đặt đồ ăn/);
 travel(3);act(/^Đi nhanh/);tick(500);assert.equal(get('health').value,90);
 act(/^Check-in/);assert.match(get('mission').textContent,/1\/3/);

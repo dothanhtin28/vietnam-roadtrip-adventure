@@ -12,6 +12,47 @@ function load(){
 }
 let s=load(),selected=s.at, travel=null, cast=null, last=0, hit=0, scale=1, tx=0,ty=0, initialized=false;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
+let in3d=false, modePicked=false, orbit=0, lastDraw=0, cameraDrag=null;
+const fullRoute=E.profile(0,places.length-1);
+const previewRoute=()=>E.profile(s.at,s.at<places.length-1?s.at+1:s.at-1);
+let idleRoute=previewRoute();
+function livePos(){return travel?E.sample(travel.plan.profile,travel.d):idleRoute[0];}
+function setView(on,manual=true){
+ if(manual)modePicked=true;
+ in3d=Boolean(on&&scene);if(on&&!scene)say('Thiết bị không mở được góc nhìn 3D. Bản đồ vẫn dùng được.');
+ $('scene-panel').hidden=!in3d;vp.hidden=in3d;$('map-nav').hidden=in3d;$('map-caption').hidden=in3d;
+ $('map-view').setAttribute('aria-pressed',String(!in3d));$('scene-view').setAttribute('aria-pressed',String(in3d));
+ if(in3d){scene.reset();lastDraw=0;}else{const p=livePos();center([p.x,p.z]);}
+}
+$('map-view').onclick=()=>setView(false);$('scene-view').onclick=()=>setView(true);
+$('mini').onclick=()=>setView(false);
+const rotate=n=>{orbit=Math.atan2(Math.sin(orbit+n),Math.cos(orbit+n));};
+$('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43);$('orbit-reset').onclick=()=>{orbit=0;};
+function pauseTravel(){if(travel&&!travel.decision){travel.paused=!travel.paused;say(travel.paused?'Đang dừng ngắm cảnh.':'Đã đi tiếp.');render();}}
+$('pause-travel').onclick=pauseTravel;
+const canvas=$('canvas3d');
+canvas.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')rotate(-.32);else if(e.key==='ArrowRight')rotate(.32);else if(e.key===' ')pauseTravel();else return;e.preventDefault();});
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;cameraDrag={id:e.pointerId,x:e.clientX};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(cameraDrag?.id===e.pointerId){rotate((cameraDrag.x-e.clientX)*.009);cameraDrag.x=e.clientX;}});
+['pointerup','pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
+let lastStats=NaN;
+function meters(v){['food','water','energy','health'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
+function visuals(ms){
+ const t=travel;
+ if(t){
+  const g=E.pace(t.plan,t.d,s,t.damage), pct=Math.round(g.speed/t.plan.speed*100), slope=Math.round(g.slope*100);
+  $('pace-speed').textContent=t.decision?'Chướng ngại':t.paused?'Đang nghỉ':'Nhịp '+pct+'%';
+  $('pace-grade').textContent=Math.abs(slope)<2?'Đường bằng':(slope>0?'Lên dốc +':'Xuống dốc ')+slope+'%';
+  $('pace-shape').textContent='Thể trạng '+Math.round(g.needs*100)+'%';
+  meters(E.condition(s,t.plan,t.d,t.damage));
+ }else{$('pace-speed').textContent='Đang dừng';$('pace-grade').textContent='';$('pace-shape').textContent='';meters(s);}
+ if(in3d&&ms-lastDraw>=32){
+  lastDraw=ms;const route=t?t.plan.profile:idleRoute,d=t?t.d:0,p=E.sample(route,d);
+  $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+`<circle cx="${p.x}" cy="${p.z}" r="39" fill="#f0c476" stroke="#244b40" stroke-width="13"/>`;
+  scene.render({route,d,mode:s.mode,moving:!!(t&&!t.decision&&!t.paused),seconds:ms/1000,orbit,hazard:t?.plan.hazards[t.nextHazard],damage:performance.now()<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2)});
+ }
+}
 let showText='Chọn một ghim để xem hoạt động hoặc lên đường.';
 function say(text){showText=text;$('message').textContent=text;}
 function save(){try{localStorage.setItem(key,JSON.stringify(s));}catch{}}
@@ -106,7 +147,8 @@ function action(label,fn,disabled=false){
 function service(k){say(E.service(s,k));save();render();}
 function travelStart(to,plan){
  if(to===s.at||!E.canTravel(s,plan)||travel||cast)return;
- travel={to,plan,d:0,decision:false,nextHazard:0,extra:0,damage:0};
+ travel={to,plan,d:0,decision:false,nextHazard:0,extra:0,damage:0,roadMinutes:0,paused:false};
+ orbit=0;if(!modePicked&&scene)setView(true,false);
  say('Đang đi tới '+places[to].name+'…');render();
 }
 function resolveHazard(avoid){
@@ -119,8 +161,8 @@ function resolveHazard(avoid){
 }
 function finishTravel(){
  const t=travel;travel=null;
- if(!E.arrive(s,t.to,t.plan,t.extra,t.damage)){say('Không thể hoàn thành chặng.');render();return;}
- selected=s.at;save();say('Đã tới '+places[s.at].name+(t.damage?' · −'+t.damage+' máu.':'.'));
+ if(!E.arrive(s,t.to,t.plan,t.extra,t.damage,t.roadMinutes)){say('Không thể hoàn thành chặng.');render();return;}
+ selected=s.at;idleRoute=previewRoute();save();say('Đã tới '+places[s.at].name+(t.damage?' · −'+t.damage+' máu.':'.'));
  render();
 }
 function catchNow(){
@@ -141,7 +183,8 @@ function photo(p){
 }
 function render(){
  const p=places[selected],local=selected===s.at;
- ['food','water','energy','health'].forEach(k=>{$(k).value=s[k];$(k).title=Math.round(s[k])+'/100';});
+ meters(travel?E.condition(s,travel.plan,travel.d,travel.damage):s);
+ $('pause-travel').disabled=!travel||travel.decision;$('pause-travel').textContent=travel?.paused?'Đi tiếp':'Tạm dừng';
  $('mode').textContent=modes[s.mode].name;$('money').textContent=s.money+'k ₫';$('clock').textContent='N'+E.day(s)+' · '+E.time(s.clock);
  $('place-tag').textContent=p.kind+(local?' · ĐANG Ở':'');$('place').textContent=p.name;$('summary').textContent=p.description;photo(p);
  $('bag').textContent=`🍚 ${s.bag.meals} · 💧 ${s.bag.bottles} · 🐟 ${s.bag.fish} · ✚ ${s.bag.meds} · 🦴 ${s.bag.treats}`;
@@ -156,7 +199,7 @@ function render(){
    action('Dừng và đi vòng · +28 phút',()=>resolveHazard(true));
    action('Đi nhanh · −'+travel.plan.impact+' máu',()=>resolveHazard(false),s.health<=travel.damage+travel.plan.impact);
   } else {
-   action('Đang di chuyển…',()=>{},true);
+   action(travel.paused?'Đi tiếp':'Tạm dừng · Ngắm cảnh',pauseTravel);
    action('Hủy chặng',()=>{travel=null;say('Quay lại điểm xuất phát của chặng.');render();});
   }
   return;
@@ -165,7 +208,7 @@ function render(){
  if(cast){route(null);action('Giật cần',catchNow);return;}
  if(!local){
   const plan=E.trip(s.at,selected,s.mode);route(plan);
-  action('Đi tới đây · '+plan.minutes+' phút',()=>travelStart(selected,plan),!E.canTravel(s,plan));
+  action('Đi tới đây · ~'+E.eta(plan,s)+' phút',()=>travelStart(selected,plan),!E.canTravel(s,plan));
   action('Về điểm hiện tại',()=>select(s.at));
   const cost=dom('p',`Cần ${plan.food} no bụng, ${plan.water} nước, ${plan.energy} sức${plan.fuel?', '+plan.fuel+'k nhiên liệu':''}.`);cost.className='action-explain';$('actions').append(cost);
  }else{
@@ -192,12 +235,13 @@ function render(){
 }
 function loop(ms){
  const dt=Math.min(.04,Math.max(0,(ms-(last||ms))/1000));last=ms;
- if(travel&&!travel.decision){
-  const t=travel;t.d+=t.plan.speed*(reduced?3:1)*dt;
+ if(travel&&!travel.decision&&!travel.paused){
+  const t=travel,prior=t.d, p=E.pace(t.plan,t.d,s,t.damage);t.d=Math.min(t.plan.distance,t.d+p.speed*(reduced?3:1)*dt);
   const next=t.plan.hazards[t.nextHazard];
   if(next&&t.d>=next.at){
    t.d=next.at;t.decision=true;say('Có chướng ngại ngay trước mặt.');render();
   }
+  t.roadMinutes+=t.plan.minutes*(t.d-prior)/t.plan.distance*t.plan.speed/p.speed;
   if(t.d>=t.plan.distance)finishTravel();else {
    const [x,y]=E.pointAt(t.plan.points,t.d);position(x,y);
    const sx=tx+x*scale,sy=ty+y*scale;
@@ -209,8 +253,9 @@ function loop(ms){
   if(age>=2450){cast=null;say(E.catchFish(s,Infinity));save();render();}
   else if(age>=1250&&!cast.phase){cast.phase=1;say('● Phao chìm! Bấm Giật cần ngay.');}
  }
+ if(ms-(lastStats||0)>90||in3d){visuals(ms);lastStats=ms;}
  requestAnimationFrame(loop);
 }
-$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();selected=0;travel=null;cast=null;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
+$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();selected=0;travel=null;cast=null;idleRoute=previewRoute();orbit=0;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
 buildTerrain();overview();initialized=true;render();requestAnimationFrame(loop);
 })();
