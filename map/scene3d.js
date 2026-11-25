@@ -166,7 +166,7 @@ function attach(canvas){
  let ctx=null;
  try{ctx=canvas.getContext('2d',{alpha:false});}catch{}
  if(!ctx)return null;
- let angle=null,camera=null,lastFrame=null,actorYaw=null,actorPosition=null,zoom=1,wheelAngle=0,backwards=false,wet=null,rain=null,heat=null,dark=null;
+ let angle=null,camera=null,lastFrame=null,actorYaw=null,actorPosition=null,zoom=1,wheelAngle=0,wet=null,rain=null,heat=null,dark=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
  const image=src=>{
   if(typeof Image==='undefined')return null;
@@ -177,14 +177,14 @@ function attach(canvas){
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
   if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}
   const base=E.sample(route,d), a=E.sample(route,d-4),b=E.sample(route,d+9);
   const direction=Math.atan2(b.x-a.x,b.z-a.z);
-  const pos=add(base,Math.cos(direction)*offset,0,-Math.sin(direction)*offset);
+  const pos=E.roadPoint(route,d,offset);
   if(Math.abs(offset)>3.5)pos.h=Math.max(base.h-.2,land(pos.x,pos.z));
   const dx=actorPosition?pos.x-actorPosition.x:0,dz=actorPosition?pos.z-actorPosition.z:0,distance=Math.hypot(dx,dz);
   actorPosition=pos;
@@ -195,11 +195,10 @@ function attach(canvas){
   heat=weatherMix(heat,weather.kind==='heat'?1:0);dark=weatherMix(dark,dusk);
   const gust=weather.kind==='wind'?1.85:.65+rain*.8;
   const angular=(old,want,alpha)=>old===null?want:old+Math.atan2(Math.sin(want-old),Math.cos(want-old))*alpha;
-  if(actualSpeed!==0)backwards=actualSpeed<0;
-  if(!moving&&d===0)backwards=false;
-  const target=direction+orbit+(mode==='walk'?.32:mode==='cart'?.24:0);
+  const travelBearing=direction+(viewDirection<0?Math.PI:0);
+  const target=travelBearing+orbit+(mode==='walk'?.32:mode==='cart'?.24:0);
   angle=angular(angle,target,1-Math.exp(-dt*5.5));
-  const facing=mode==='walk'&&moving&&distance>.001?Math.atan2(dx,dz):direction+(backwards&&mode==='walk'?Math.PI:0);
+  const facing=mode==='walk'&&moving&&distance>.001?Math.atan2(dx,dz):travelBearing;
   actorYaw=angular(actorYaw,facing+(mode==='walk'?0:steer*.31),1-Math.exp(-dt*10));
   const heading=actorYaw,fx=Math.sin(angle),fz=Math.cos(angle),rx=fz,rz=-fx;
   const follow=viewpoint?-27:mode==='cart'?13:mode==='car'?10.1:mode==='walk'?8.65:8.6;
@@ -502,7 +501,7 @@ function attach(canvas){
   }
   if(pickup&&Math.abs(pickup.at-d)<54){
    const p=E.sample(route,pickup.at),q=E.sample(route,pickup.at+1),heading=Math.atan2(q.x-p.x,q.z-p.z);
-   const mark=add(p,Math.cos(heading)*2.4,0,-Math.sin(heading)*2.4);
+   const mark={...pickup.position};
    mark.h=land(mark.x,mark.z)+.07;
    const color=pickup.kind==='corn'?[233,185,82]:pickup.kind==='fruit'?[213,119,71]:[201,154,111];
    for(const x of [-.27,0,.29])box(add(mark,x,0,x*.32),.25,.24,.28,heading,color,.12,-.8);
@@ -600,7 +599,7 @@ function attach(canvas){
    WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage);
   }
   if(companion&&mode==='walk'){
-   const trail=E.sample(route,d-(backwards?-3.4:3.4));
+   const trail=E.sample(route,d-viewDirection*3.4);
    const companionPos=shift(trail,-2.1,.14,d<3.4?-1.6:0);
    const pose=follower.pose({moving,speed,actualSpeed,seconds,dt,turn:steer*.4,reduced});
    WindHiker.draw((p,c,light)=>face(p,c,light,-1.05),([x,y,z])=>shift(companionPos,x*.93,y*.93,z*.93),pose,'walk',false,companion);
@@ -721,7 +720,7 @@ function attach(canvas){
    }
   }
  };
- return {render,reset:()=>{angle=null;camera=null;actorYaw=null;actorPosition=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;backwards=false;actor.reset();follower.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;actorYaw=null;actorPosition=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;actor.reset();follower.reset();}};
 }
 return {attach,land};
 })();

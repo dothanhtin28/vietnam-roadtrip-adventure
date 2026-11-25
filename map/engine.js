@@ -99,6 +99,11 @@ function grade(profile,d){
  const a=sample(profile,d-8),b=sample(profile,d+8);
  return b.d>a.d?(b.h-a.h)/(b.d-a.d):0;
 }
+function roadPoint(profile,d,offset){
+ const p=sample(profile,d),a=sample(profile,d-2),b=sample(profile,d+2);
+ const length=Math.hypot(b.x-a.x,b.z-a.z)||1;
+ return {...p,x:p.x+(b.z-a.z)*offset/length,z:p.z-(b.x-a.x)*offset/length};
+}
 function condition(s,plan,d,damage=0){
  const f=plan.distance?bound(d/plan.distance,0,1):0;
  return {food:clamp(s.food-plan.food*f),water:clamp(s.water-plan.water*f),energy:clamp(s.energy-plan.energy*f),health:clamp(s.health-damage)};
@@ -296,5 +301,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight,canCamp,forageSpot,collectForage};
+return {fresh,time,day,weather,path,length,pointAt,profile,sample,roadPoint,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight,canCamp,forageSpot,collectForage};
 })();

@@ -4,6 +4,7 @@ Mở `index.html` sau khi pull. Game mở ở góc nhìn 3D và chạy bằng HT
 
 ## Điều khiển khi đi 3D
 - Game mở ở góc nhìn thứ ba. Giữ **W / ↑** để tiến, **S / ↓** để lùi, **A / ←** hoặc **D / →** để đánh lái. Điện thoại dùng bốn nút giữ dưới khung cảnh. Nhả phím để dừng; khi tới điểm dừng, nhả rồi nhấn lại để sang chặng kế.
+- Bấm **Q** hoặc **Quay đầu** giữa chặng, rồi giữ **W / ↑** để đi về hướng vừa quay. Khi thấy nút **Nhặt**, bấm nút đó hoặc phím **E** để lấy vật phẩm bên cạnh. Đi sát vật phẩm cũng tự nhặt.
 - Kéo ngang để xoay camera, kéo dọc hoặc bấm nút ngước nhìn và nhìn xuống để ngắm cảnh. Bấm **Tự đi** để đi một chặng. Game dừng ở điểm đến hoặc khi no bụng, nước, thể lực hay máu xuống dưới 30%. Khi đang dừng giữa chặng, có thể dùng đồ trong túi.
 - Tuyến 3D giới hạn trong đường và lề, chưa phải thế giới mở. Né đá/gỗ bằng A/D, hoặc đi thẳng và chấp nhận va chạm. Lên dốc, bị thương, đói, khát và mệt đều ảnh hưởng tốc độ.
 - Nhân vật dùng mesh 3D bo và khớp thủ tục trong `map/hiker3d.js`. Balo, dây đeo, bình nước, giày, tóc và gương mặt là hình học 3D, không dùng sprite; camera gần hơn và có độ trễ khi bám. Đi bộ, chạy nhẹ, xoay người, đứng thở, câu cá, ăn, uống, ngồi nghỉ và chụp ảnh có pose/hoạt ảnh riêng. Đây là renderer Canvas hiện tại, chưa dùng GLB hoặc skinning chuẩn glTF.

@@ -33,10 +33,6 @@ function setAuto(on){
  button.setAttribute('aria-pressed',String(on));button.textContent=on?'Dừng tự đi':'Tự đi';
 }
 function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;jump=null;jumpRequested=false;setAuto(false);}
-function roadPoint(plan,d,offset){
- const p=E.sample(plan.profile,d),a=E.sample(plan.profile,d-2),b=E.sample(plan.profile,d+2),n=Math.hypot(b.x-a.x,b.z-a.z)||1;
- return {...p,x:p.x+(b.z-a.z)/n*offset,z:p.z-(b.x-a.x)/n*offset};
-}
 const fullRoute=E.profile(0,places.length-1);
 const previewRoute=()=>E.profile(s.at,s.at<places.length-1?s.at+1:s.at-1);
 let idleRoute=previewRoute();
@@ -54,7 +50,32 @@ $('auto-walk').onclick=()=>{
  if(!auto&&belowAutoThreshold()){say('Tiếp tế để các chỉ số đạt ít nhất 30% rồi bật Tự đi.');return;}
  setAuto(!auto);
 };
-function livePos(){return travel?roadPoint(travel.plan,travel.d,aside):idleRoute[0];}
+function livePos(){return travel?E.roadPoint(travel.plan.profile,travel.d,aside):idleRoute[0];}
+function pickupDistance(){
+ if(!travel?.pickup)return Infinity;
+ const p=livePos(),item=travel.pickup.position;
+ return Math.hypot(p.x-item.x,p.z-item.z);
+}
+function pickupNearby(radius=3.5){
+ if(!in3d||jump||pickupDistance()>radius)return false;
+ const item=travel.pickup;
+ travel.pickup=null;
+ say(E.collectForage(s,item));render();return true;
+}
+function tryPickup(){
+ if(!pickupNearby())say('Tiến lại gần vật phẩm rồi bấm E để nhặt.');
+}
+function turnAround(){
+ if(!in3d||!travel||jump)return;
+ setAuto(false);
+ travel.heading=-travel.facing;
+ travel.facing=travel.heading;
+ orbit=0;viewpoint=false;look=0;
+ say('Đã quay đầu về phía '+places[travel.heading<0?s.at:travel.to].name+'. Giữ W hoặc ▲ để đi tiếp.');
+ trailGuide();
+}
+$('pickup-item').onclick=tryPickup;
+$('turn-around').onclick=turnAround;
 function locateOnGeoMap(stop=null){
  const [lat,lon]=stop!==null?E.geoPosition(stop):travel?E.geoPosition(s.at,travel.to,travel.d/travel.plan.distance):E.geoPosition(s.at);
  const coordinate=[lat,lon].map(n=>n.toFixed(5)).join(',');
@@ -145,6 +166,12 @@ const canvas=$('canvas3d');
 function drivingKey(e){return inputs[e.key.length===1?e.key.toLowerCase():e.key];}
 window.addEventListener('keydown',e=>{
  if(!in3d||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
+ const key=e.key.toLowerCase();
+ if(key==='e'||key==='q'){
+  e.preventDefault();
+  if(!e.repeat){if(key==='e')tryPickup();else turnAround();}
+  return;
+ }
  if(e.key===' '&&!e.target?.closest?.('button,a')){
   e.preventDefault();if(!e.repeat)jumpRequested=true;return;
  }
@@ -176,6 +203,9 @@ function meters(v){['food','water','energy','health'].forEach(k=>{$(k).value=v[k
 function animate(kind,seconds){activity={kind,at:performance.now(),until:performance.now()+seconds*1000};}
 function updateStats(){
  const t=travel,clock=Math.floor(gameClock()),weather=E.weather(clock);
+ const pickupButton=$('pickup-item'),nearby=in3d&&!jump&&pickupDistance()<=3.5;
+ pickupButton.hidden=!nearby;
+ if(nearby)pickupButton.textContent='Nhặt '+forage[t.pickup.kind].name.toLowerCase()+' · E';
  $('clock').textContent='N'+E.day({clock})+' · '+E.time(clock);
  $('pace-weather').textContent=weather.label+(weather.mud?' · Đường lầy':'');
  const remaining=t&&t.plan.hazards[t.nextHazard]?t.plan.hazards[t.nextHazard].at-t.d:Infinity;
@@ -201,7 +231,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,offset:aside,speed:speedPose,actualSpeed,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:activeMode(),moving:motion,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -330,7 +360,9 @@ function travelStart(direction,mode=s.mode){
   }
   return;
  }
- blocked='';activity=null;openHost=null;travel={to,plan,d:0,direction,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup:E.forageSpot(s,s.at,to,plan.distance)};
+ const pickup=E.forageSpot(s,s.at,to,plan.distance);
+ if(pickup)pickup.position=E.roadPoint(plan.profile,pickup.at,plan.footOnly?.85:2.4);
+ blocked='';activity=null;openHost=null;travel={to,plan,d:0,direction,heading:1,facing:1,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup};
  selected=s.at;orbit=0;look=0;viewpoint=false;aside=0;
  say(mode==='cart'?'Xe bò đã sẵn sàng. Giữ W hoặc ▲ để đi, trả tiền khi tới nơi.':'Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
 }
@@ -365,6 +397,7 @@ function trailGuide(){
  const t=travel, next=s.at===places.length-1?s.at-1:s.at+1;
  actions.replaceChildren();$('drive-controls').hidden=!in3d||Boolean(cast);
  $('jump').hidden=activeMode()!=='walk';
+ $('turn-around').hidden=!t;
  if(cast){
   label.textContent='ĐANG CÂU CÁ';title.textContent='Canh phao chìm';detail.textContent='Khi nhật ký báo phao chìm, bấm Giật cần.';
   button('Giật cần',catchNow);return;
@@ -376,11 +409,11 @@ function trailGuide(){
  }
  label.textContent=t?'TRÊN ĐƯỜNG':s.at===places.length-1?'CUỐI TUYẾN':'CHẶNG TIẾP THEO';
  const destination=t?.to??next,kilometers=t?.plan.km??TripData.legKilometers[Math.min(s.at,destination)];
- title.textContent=places[destination].name+' · khoảng '+kilometers+' km';
+ title.textContent=t?.heading===-1?'Quay về '+places[s.at].name:places[destination].name+' · khoảng '+kilometers+' km';
  const footOnly=t?.plan.footOnly??roads[Math.min(s.at,destination)].footOnly;
  detail.textContent=s.at===places.length-1&&!t?'Giữ S hoặc ▼ để trở về Sống lưng Khủng long.':
-  footOnly?'Đường mòn sát vách đá · Chỉ đi bộ. Giữ W/S để di chuyển.':
-  activeMode()==='walk'?'W/S tiến hoặc lùi · A/D né · Space hoặc Nhảy để vượt chướng ngại.':'W/S tiến hoặc lùi · A/D né sang hai bên.';
+  footOnly?'Đường mòn chỉ đi bộ · W/S đi, Q quay đầu, E nhặt đồ.':
+  activeMode()==='walk'?'W/S tiến hoặc lùi · A/D né · Q quay đầu · E nhặt đồ · Space nhảy.':'W/S tiến hoặc lùi · A/D né · Q quay đầu · E nhặt đồ.';
 }
 function render(){
  const p=places[selected],local=selected===s.at;
@@ -472,14 +505,15 @@ function loop(ms){
  if(!travel&&drive&&!needRelease)travelStart(drive);
  const nextObstacle=travel?.plan.hazards[travel.nextHazard],mode=activeMode();
  const obstacleDistance=nextObstacle?nextObstacle.at-travel.d:Infinity;
+ const input=travel?drive*travel.direction*travel.heading:0;
  let steering=travel&&in3d?Number(pressing('right'))-Number(pressing('left')):0;
+ if(travel)steering*=travel.facing;
  if(auto&&travel&&!steering&&mode!=='walk'){
-  const target=obstacleDistance>0&&obstacleDistance<40?4.2:0;
+  const target=input>0&&obstacleDistance>0&&obstacleDistance<40?4.2:0;
   if(Math.abs(aside-target)>.18)steering=Math.sign(target-aside);
  }
  steerPose+=(steering-steerPose)*(1-Math.exp(-dt*13));
- const input=travel?drive*travel.direction:0;
- if(auto&&mode==='walk'&&obstacleDistance>1.6&&obstacleDistance<=2.2)jumpRequested=true;
+ if(auto&&input>0&&mode==='walk'&&obstacleDistance>1.6&&obstacleDistance<=2.2)jumpRequested=true;
  if(jumpRequested&&in3d&&!cast&&mode==='walk'&&!jump&&(!activity||ms>=activity.until)&&(!travel||ms>=travel.holdUntil)){
   jump={phase:0,direction:input};
  }
@@ -497,11 +531,12 @@ function loop(ms){
   aside=Math.max(-limit,Math.min(limit,aside+steering*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
   motion=aside!==oldOffset;
   if(throttle&&ms>=t.holdUntil){
+   t.facing=Math.sign(throttle);
    t.throttle=throttle;
    const qty=E.pace(t.plan,t.d,s,t.damage,throttle,clock);speedPose=qty.speed/t.plan.speed;
    throttleRamp=Math.min(1,throttleRamp+dt/(mode==='walk'?.29:.49));
    const strideSpeed=qty.speed*worldUnitsPerKmh;
-   const groundedSpeed=strideSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle<0?.58:1)*(Math.abs(aside)>3.7?.76:1);
+   const groundedSpeed=strideSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle!==t.heading?.58:1)*(Math.abs(aside)>3.7?.76:1);
    const speed=jump?Math.max(groundedSpeed,5.15*(1-weather.mud*.15)):groundedSpeed;
    t.d=Math.max(0,Math.min(t.plan.distance,t.d+throttle*speed*dt));
    motion=motion||t.d!==prior;
@@ -524,19 +559,16 @@ function loop(ms){
     }
    }
    if(speedKmh>0)t.roadMinutes+=60*t.plan.km*Math.abs(t.d-prior)/(t.plan.distance*Math.min(speedKmh,qty.speed));
-   const pickup=t.pickup;
-   if(pickup&&((prior<pickup.at&&t.d>=pickup.at)||(prior>pickup.at&&t.d<=pickup.at))){
-    t.pickup=null;say(E.collectForage(s,pickup));render();
-   }
+   if(t.d!==prior)pickupNearby(2.6);
    if(t.d>=t.plan.distance)finishTravel();
    else if(t.d===0&&throttle<0){
     for(const stat of ['food','water','energy'])s[stat]=Math.min(100,s[stat]);
     s.health=Math.max(1,Math.min(100,s.health-t.damage));s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;setAuto(false);
-    save();say('Đã lùi về '+places[s.at].name+'.');render();
+    save();say('Đã quay về '+places[s.at].name+'.');render();
    }
   }
  }
- if(travel){const p=livePos();position(p.x,p.z);}
+ if(travel){if(motion&&!actualSpeed)pickupNearby(2.6);const p=livePos();position(p.x,p.z);}
  if(cast){
   const age=performance.now()-cast.start;
   if(age>=2450){cast=null;say(E.catchFish(s,Infinity));save();render();}
