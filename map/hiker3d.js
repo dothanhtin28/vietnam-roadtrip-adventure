@@ -7,12 +7,12 @@ globalThis.WindHiker=(()=>{
  const unit=a=>times(a,1/(Math.hypot(...a)||1)), dot=(a,b)=>a.reduce((r,v,i)=>r+v*b[i],0);
  const between=(a,b,t)=>a.map((v,i)=>mix(v,b[i],t));
  const sun=unit([-.65,.83,-.48]);
- const fabric={jacket:[191,100,56],light:[220,130,71],cuff:[102,61,42],pants:[53,74,83],pantsEdge:[67,86,90],shoe:[104,71,52],sole:[47,46,40],skin:[218,162,111],shade:[178,107,77],hair:[38,34,30],green:[98,112,68],greenDark:[65,82,57],strap:[68,72,55],trim:[182,156,91],metal:[163,169,148],bottle:[115,170,164],scarf:[95,127,113],white:[239,219,178]};
+ const fabric={jacket:[204,104,55],light:[236,150,83],cuff:[118,67,50],pants:[52,69,81],pantsEdge:[73,91,98],shoe:[96,69,53],sole:[44,46,44],skin:[217,157,112],shade:[172,105,78],hair:[39,34,30],green:[66,113,104],greenDark:[49,78,75],strap:[63,65,52],trim:[218,184,105],metal:[163,169,148],bottle:[113,182,171],scarf:[93,128,112],white:[239,219,178]};
  const rings=Array.from({length:13},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
  function draw(face,world,pose,mode,hurt=false){
   const F=fabric, orange=hurt?[224,104,79]:F.jacket;
   const tilt=pose.lean, slant=(p)=>{
-   const y=p[1]-1.14;return [p[0]+Math.sin(pose.sway)*y*.07,p[1]+pose.bob,p[2]+y*tilt];
+   const y=p[1]-1.14,roll=pose.roll;return [p[0]*Math.cos(roll)+y*Math.sin(roll),1.14+y*Math.cos(roll)-p[0]*Math.sin(roll)+pose.bob,p[2]+y*tilt];
   };
   function emit(q,c,darken=1,normal=null){
    const n=normal??unit(cross(sub(q[1],q[0]),sub(q[2],q[0])));
@@ -61,6 +61,7 @@ globalThis.WindHiker=(()=>{
   limb(upper([0,1.15,.179]),upper([0,1.91,.158]),.014,.013,F.trim,6);
   blob([.155,1.61,.180],.072,.075,.029,F.light,6,upper);
   loft([[0,1.875,.016,.153,.143],[0,1.928,.025,.170,.150],[0,1.972,.034,.139,.123]],F.scarf,10,upper);
+  blob([0,1.79,-.145],.235,.135,.106,F.light,10,upper,.9);
   limb(upper([0,1.92,.025]),upper([0,2.045,.033]),.099,.112,F.skin,8);
   const yaw=pose.faceYaw, hyaw=Math.sin(yaw), hcos=Math.cos(yaw), nod=pose.lookUp;
   const head=p=>{
@@ -88,7 +89,7 @@ globalThis.WindHiker=(()=>{
   loft([[0,1.07,-.251,.153,.092],[0,1.13,-.303,.233,.153],[0,1.37,-.324,.267,.175],[0,1.62,-.322,.259,.164],[0,1.77,-.294,.221,.131],[0,1.83,-.258,.151,.084]],F.greenDark,12,pack);
   loft([[0,1.24,-.426,.123,.057],[0,1.30,-.447,.203,.088],[0,1.47,-.448,.207,.077],[0,1.55,-.420,.170,.053]],F.green,10,pack);
   blob([0,1.684,-.449],.209,.092,.086,[129,134,81],10,pack);
-  limb(pack([-.257,1.81,-.323]),pack([.257,1.81,-.323]),.103,.103,[134,137,86],10);
+  limb(pack([-.257,1.81,-.323]),pack([.257,1.81,-.323]),.103,.103,[159,142,96],10);
   for(const x of [-.182,.182]){
    limb(pack([x,1.73,-.486]),pack([x,1.37,-.516]),.023,.028,F.strap,6);
    limb(pack([x-.026,1.575,-.521]),pack([x+.026,1.575,-.521]),.028,.028,F.metal,6);
@@ -103,7 +104,7 @@ globalThis.WindHiker=(()=>{
   // Jagged mountain-shaped woven trail badge on the back pocket.
   emit([pack([-.065,1.402,-.529]),pack([-.026,1.462,-.531]),pack([.005,1.431,-.529]),pack([.029,1.455,-.528]),pack([.075,1.401,-.527])],F.trim,1.04,[0,0,-1]);
   for(const side of [-1,1]){
-   const [hip,knee,ankle]=pose.legs[side===1?1:0].map(p=>[p[0],p[1]+pose.bob*.40,p[2]]);
+   const [hip,knee,ankle]=pose.legs[side===1?1:0];
    limb(hip,knee,.150,.118,F.pants,9);limb(knee,ankle,.116,.079,F.pants,9);
    blob(knee,.118,.131,.113,F.pantsEdge,8,null,.98);
    const [x,y,z]=ankle;
@@ -142,23 +143,34 @@ globalThis.WindHiker=(()=>{
  }
  function create(){
   let phase=0,blend=0,run=0,mixActivity=0,lastAction='',faceYaw=0;
-  return {pose({moving=false,mode='walk',speed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0}){
+  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false}){
    dt=clamp(dt,0,.08);
    const damp=(k)=>1-Math.exp(-dt*k);
-   blend=mix(blend,moving?1:0,damp(9));run=mix(run,clamp((speed-1.015)*7,0,1),damp(5));
-   if(moving||blend>.025)phase+=dt*(mode==='walk'?mix(8.1,12.2,run):9.5)*Math.max(.34,clamp(speed,.2,1.35));
+   const effort=clamp(Math.abs(actualSpeed)/29,0,1.35);
+   blend=mix(blend,moving?Math.max(.18,Math.min(effort+.24,1)):0,damp(moving?10:14));
+   run=mix(run,clamp((speed-1.015)*6,0,1)*Math.min(1,effort),damp(5));
+   if(moving)phase=(phase+dt*(mode==='walk'?mix(6.4,12.5,effort/1.35):8.5))%TAU;
    if(action)lastAction=action;
    mixActivity=mix(mixActivity,action?1:0,damp(action?8:5));faceYaw=mix(faceYaw,clamp(turn,-.6,.6)*.45,damp(6));
    const actions={rest:lastAction==='rest'?mixActivity:0};
    const rolling=mode!=='walk', sit=actions.rest, breathing=Math.sin(seconds*2.4);
-   const lean=(rolling?.25:.038+run*.23)*blend, stride=rolling?.24:mix(.24,.40,run);
-   const swing=Math.sin(phase), sway=swing*blend*.5+breathing*.10;
-   const hips=1.145-sit*.62-(rolling?.09:0);
+   const lean=(rolling?.25:.055+run*.19)*blend,stride=rolling?.23:mix(.39,.49,run);
+   const swing=Math.cos(phase),bob=(reduced?.38:1)*(Math.cos(phase*2)*blend*.034+breathing*.012);
+   const hips=1.10-sit*.58-(rolling?.08:0)+bob;
    const legs=[-1,1].map(sign=>{
-    const t=phase+(sign===1?PI:0), fore=Math.sin(t)*stride*blend;
-    const lift=Math.max(0,Math.cos(t))*blend*(rolling?.11:.085+run*.118);
-    const foot=[sign*(.153+sit*.086),.137+lift+(rolling?.24:0),fore+(rolling?.13:0)+sit*.56];
-    return [[sign*.158,hips,sit*-.11],[sign*(.168+sit*.074),mix(.59,.35,sit)+lift*.65+(rolling?.05:0),fore*.59+.047+sit*.38],foot];
+    const t=(phase+(sign===1?PI:0))%TAU/TAU,stance=.61;
+    const recovery=clamp((t-stance)/(1-stance),0,1);
+    const fore=(t<stance?1-2*t/stance:-Math.cos(recovery*PI))*stride*blend;
+    const lift=Math.sin(recovery*PI)*blend*(.19+run*.08);
+    const pedal=mode==='bike'?blend:0;
+    const foot=[sign*(.153+sit*.086),.137+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift),
+     (rolling?.13+pedal*.23*Math.cos(t*TAU):fore)+sit*.56];
+    const hip=[sign*.158,hips,sit*-.11];
+    if(rolling||sit>.01)return [hip,[sign*(.168+sit*.074),mix(.59,.35,sit),foot[2]*.65+.12],foot];
+    const rise=hip[1]-foot[1],reach=foot[2]-hip[2],distance=Math.hypot(rise,reach)||1;
+    const flex=Math.sqrt(Math.max(0,.53**2-distance**2*.25));
+    const knee=[sign*.168,(hip[1]+foot[1])*.5+flex*reach/distance,(hip[2]+foot[2])*.5+flex*rise/distance];
+    return [hip,knee,foot];
    });
    function actionHand(sign,base){
     const t=actionTime,side=sign>0,last=lastAction;
@@ -177,7 +189,8 @@ globalThis.WindHiker=(()=>{
     return [[sign*.347,1.728,0],elbow,hand];
    });
    const blink=1-.93*Math.pow(Math.max(0,Math.cos(seconds*1.37+1.3)),95);
-   return {legs,arms,blink,faceYaw,lean,sway,crouch:sit,actions,pack:swing*blend,lookUp:lastAction==='drink'?mixActivity*.24:0,bob:Math.abs(swing)*blend*.055+breathing*.028,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4)};
+   const roll=(reduced?.5:1)*(swing*blend*.049+turn*(rolling?.18:.075));
+   return {legs,arms,blink,faceYaw,lean,roll,crouch:sit,actions,pack:swing*blend,lookUp:lastAction==='drink'?mixActivity*.24:0,bob,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4)};
   },reset(){phase=0;blend=0;run=0;mixActivity=0;lastAction='';faceYaw=0;}};
  }
  return {create,draw};

@@ -26,8 +26,24 @@ function pointAt(path,d){
 const elevations=[12,17,38,66,82,119,138,114];
 const bound=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 const routeProfile=[];
+function roundBends(points){
+ const out=[points[0]];
+ for(let i=1;i<points.length-1;i++){
+  const a=points[i-1],b=points[i],c=points[i+1];
+  const inLength=length([a,b]),outLength=length([b,c]);
+  const radius=Math.min(13,inLength*.28,outLength*.28);
+  const start=b.map((v,j)=>v+(a[j]-v)*radius/inLength);
+  const end=b.map((v,j)=>v+(c[j]-v)*radius/outLength);
+  for(let step=0;step<=6;step++){
+   const t=step/6,u=1-t;
+   out.push(b.map((v,j)=>u*u*start[j]+2*u*t*v+t*t*end[j]));
+  }
+ }
+ out.push(points.at(-1));
+ return out;
+}
 for(let i=0;i<roads.length;i++){
- const points=path(i,i+1), dist=length(points);let d=0;
+ const points=roundBends(path(i,i+1)), dist=length(points);let d=0;
  routeProfile.push(points.map(([x,z],k)=>{
   if(k)d+=Math.hypot(x-points[k-1][0],z-points[k-1][1]);
   const t=d/dist,h=elevations[i]+(elevations[i+1]-elevations[i])*t+(i%2?3.3:2.3)*Math.sin(2*Math.PI*t);
@@ -46,11 +62,11 @@ function profile(from,to){
 }
 function sample(profile,d){
  if(d<=0)return {...profile[0]};
- for(let i=1;i<profile.length;i++){
-  const a=profile[i-1],b=profile[i];
-  if(d<=b.d){const t=(d-a.d)/(b.d-a.d);return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,h:a.h+(b.h-a.h)*t,d};}
- }
- return {...profile.at(-1)};
+ if(d>=profile.at(-1).d)return {...profile.at(-1)};
+ let lo=0,hi=profile.length-1;
+ while(hi-lo>1){const mid=(hi+lo)>>1;if(profile[mid].d<d)lo=mid;else hi=mid;}
+ const a=profile[lo],b=profile[hi],t=(d-a.d)/(b.d-a.d);
+ return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,h:a.h+(b.h-a.h)*t,d};
 }
 function grade(profile,d){
  const a=sample(profile,d-8),b=sample(profile,d+8);
@@ -75,16 +91,16 @@ function eta(plan,s){
  return Math.ceil(duration);
 }
 function trip(from,to,mode){
- const points=path(from,to), distance=length(points);
+ const course=profile(from,to), points=course.map(p=>[p.x,p.z]), distance=course.at(-1).d;
  let weighted=0, after=0;const hazards=[];
  const dir=Math.sign(to-from);
  for(let i=from;i!==to;i+=dir){
-  const leg=roads[Math.min(i,i+dir)], len=length(path(i,i+dir));
+  const leg=roads[Math.min(i,i+dir)], len=profile(i,i+dir).at(-1).d;
   if(leg.hazard)hazards.push({name:leg.hazard,at:after+len*.55});
-  after+=len;weighted+=len*leg.slope;
+  after+=len;weighted+=length(path(i,i+dir))*leg.slope;
  }
  const v=modes[mode]||modes.walk, motor=v.fuel>0;
- return {points,profile:profile(from,to),mode,distance,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(weighted/v.time),speed:v.speed,hazards,impact:v.impact};
+ return {points,profile:course,mode,distance,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(weighted/v.time),speed:v.speed,hazards,impact:v.impact};
 }
 function apply(s,{food=0,water=0,energy=0,health=0,minutes=0}){
  s.food=clamp(s.food+food);s.water=clamp(s.water+water);s.energy=clamp(s.energy+energy);s.health=clamp(s.health+health);s.clock+=minutes;
