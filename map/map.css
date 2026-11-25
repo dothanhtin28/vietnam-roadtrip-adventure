@@ -44,7 +44,8 @@ footer{font-size:.78rem;color:#4e6355}
 .geo-location{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 12px;background:#edf1e4;border-bottom:1px solid #c0c9b3;font-size:.76rem}
 .geo-location a{font-weight:700}
 #party{font-weight:700;color:var(--pine)}
-.encounter{grid-column:1/-1;margin:2px 0 0;font-size:.83rem}
+.encounter{grid-column:1/-1;margin:2px 0 0;font-size:.83rem;display:flex;align-items:center;gap:10px}
+.encounter img{border-radius:9px;object-fit:cover;flex:none}
 #scene-panel{height:clamp(400px,64vh,680px);position:relative;background:#a7bbb2}
 #canvas3d{display:block;width:100%;height:100%;touch-action:pan-y;cursor:ew-resize}
 #mini{position:absolute;right:7px;top:49px;width:clamp(88px,16%,145px);aspect-ratio:1.2;padding:3px;background:#f7f3dbeb;border-color:#8ba087;box-shadow:0 3px 10px #213d2840}
@@ -71,4 +72,6 @@ footer{font-size:.78rem;color:#4e6355}
 
 #drive-controls{display:flex;gap:4px}#drive-controls button{min-width:39px;padding:4px 8px;touch-action:none;user-select:none}#drive-controls button:not([aria-pressed=true]){background:#eef1de;color:#184738;border-color:#93a484}
 #drive-controls button[aria-pressed=true]{background:#16483c;color:#fff5d7}
+#drive-controls #jump{margin-left:3px;padding-inline:11px}
+.pace #pace-obstacle{background:#fee5ac;color:#623f16;font-weight:700}
 #trail-extra:empty{display:none}

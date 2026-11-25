@@ -15,18 +15,19 @@ const places=[
 const roads=[
  {from:0,to:1,bends:[[225,848],[229,799],[290,800],[297,758]],slope:1},
  {from:1,to:2,bends:[[382,718],[375,686],[427,677],[430,641]],slope:1},
- {from:2,to:3,bends:[[491,621],[532,595],[493,567],[555,549]],slope:1.18,hazard:'Đá rơi trên đường'},
+ {from:2,to:3,bends:[[491,621],[532,595],[493,567],[555,549]],slope:1.18,hazard:'Đá rơi trên đường',obstacle:'rock'},
  {from:3,to:4,bends:[[584,488],[594,439],[660,440],[691,399],[734,414]],slope:1.04},
- {from:4,to:5,bends:[[830,368],[822,326],[870,318],[883,277]],slope:1.17,hazard:'Rãnh bùn sau mưa'},
+ {from:4,to:5,bends:[[830,368],[822,326],[870,318],[883,277]],slope:1.17,hazard:'Rãnh bùn sau mưa',obstacle:'mud'},
  {from:5,to:6,bends:[[960,230],[1006,249],[1017,203]],slope:1.05},
- {from:6,to:7,bends:[[1110,207],[1092,243],[1160,266],[1137,298],[1180,303]],slope:1.2,hazard:'Cành cây chắn đèo'}
+ {from:6,to:7,bends:[[1110,207],[1092,243],[1160,266],[1137,298],[1180,303]],slope:1.2,hazard:'Cành cây chắn đèo',obstacle:'branch'}
 ];
 const modes={
- walk:{name:'Đi bộ',icon:'🚶',price:0,energy:47,speed:95,time:5.4,fuel:0,impact:10},
- bike:{name:'Xe đạp',icon:'🚲',price:40,energy:34,speed:153,time:10,fuel:0,impact:20},
- moto:{name:'Xe máy',icon:'🛵',price:95,energy:76,speed:218,time:15,fuel:1,impact:28},
- car:{name:'Ô tô',icon:'🚙',price:160,energy:108,speed:245,time:17,fuel:2,impact:15}
+ walk:{name:'Đi bộ',icon:'🚶',price:0,energy:47,kmh:6.2,fuel:0,impact:10},
+ bike:{name:'Xe đạp',icon:'🚲',price:40,energy:34,kmh:17,fuel:0,impact:20},
+ moto:{name:'Xe máy',icon:'🛵',price:95,energy:76,kmh:37,fuel:1,impact:28},
+ car:{name:'Ô tô',icon:'🚙',price:160,energy:108,kmh:46,fuel:2,impact:15}
 };
+const legKilometers=[7,15,22,46,27,18,17];
 // Latitude and longitude anchors for the game's compressed route. Fictional
 // stops sit between the actual landmarks rather than representing addresses.
 const geoAnchors=[
@@ -37,8 +38,10 @@ const geoAnchors=[
 const companions={
  linh:{name:'Linh',bio:'Một người mê chụp ảnh, đang tìm đường lên cao nguyên.',chance:.68,outfit:'fern'},
  minh:{name:'Minh',bio:'Một phượt thủ đang nghỉ chân và cân nhắc chặng tiếp theo.',chance:.52,outfit:'indigo'},
- thao:{name:'Thảo',bio:'Một bạn đi bộ đường dài đang ngắm cảnh bên đường.',chance:.60,outfit:'plum'}
+ thao:{name:'Thảo',bio:'Một bạn đi bộ đường dài đang ngắm cảnh bên đường.',chance:.60,outfit:'plum'},
+ mai:{name:'Mai',bio:'Nữ phượt thủ thích săn mây và biết vài lối ngắm ruộng bậc thang.',chance:.57,outfit:'azure',weight:.32,portrait:'assets/companion-mai.webp'},
+ vy:{name:'Vy',bio:'Cô gái đi bộ một mình, mang theo cuốn sổ ký họa phong cảnh.',chance:.64,outfit:'gold',weight:.32,portrait:'assets/companion-vy.webp'}
 };
 const petPrices={dog:38,cat:30};
-return {places,roads,modes,geoAnchors,companions,petPrices};
+return {places,roads,modes,geoAnchors,legKilometers,companions,petPrices};
 })();

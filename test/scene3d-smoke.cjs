@@ -36,10 +36,17 @@ for(const [idx,mode] of ['walk','bike','moto','car'].entries()){
 }
 assert(Number.isFinite(S.land(580,420)));
 const Rig=c.WindHiker, rig=Rig.create();
-const gait=Array.from({length:100},()=>rig.pose({moving:true,speed:.98,actualSpeed:21,dt:1/60}));
+const gait=Array.from({length:100},()=>rig.pose({moving:true,speed:.98,actualSpeed:2.5,dt:1/60}));
 assert(gait.some(p=>p.feet[0]>.12),'Walking should land heel-first');
 assert(gait.some(p=>p.feet[0]<-.25),'Walking should push off from the toes');
-assert(gait.some(p=>p.legs[0][2][1]>p.legs[1][2][1]+.10),'One foot should lift while the other supports the body');
+assert(gait.some(p=>p.legs[0][2][1]>p.legs[1][2][1]+.28),'The swing foot should be visibly clear of the planted foot');
+const steady=gait.slice(58);
+assert(steady.some((p,i)=>{
+ const previous=steady[i-1];
+ if(!previous||p.feet[0]!==0||previous.feet[0]!==0)return false;
+ return Math.abs(p.legs[0][2][2]-previous.legs[0][2][2]+2.5/60)<.002;
+}),'In flat stance the foot should move back by the same distance the body moves forward');
+assert(E.jumpHeight(.5)>1 && E.jumpHeight(null)===0 && E.jumpHeight(1)===0);
 assert(rig.pose({trekking:true}).poles);
 assert(!rig.pose({trekking:true,mode:'bike'}).poles);
 rig.reset();

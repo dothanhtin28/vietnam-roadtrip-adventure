@@ -12,14 +12,16 @@ globalThis.WindHiker=(()=>{
   fern:{jacket:[105,131,75],light:[151,171,100],green:[169,110,70],greenDark:[110,75,57]},
   indigo:{jacket:[65,100,150],light:[109,144,183],green:[151,120,68],greenDark:[104,82,54]},
   plum:{jacket:[143,85,120],light:[181,124,154],green:[107,128,79],greenDark:[75,93,60]},
+  azure:{jacket:[63,104,143],light:[102,146,179],green:[127,77,75],greenDark:[81,55,55]},
+  gold:{jacket:[151,127,60],light:[185,159,99],green:[86,104,83],greenDark:[55,74,60]},
   woman:{jacket:[138,67,78],light:[188,116,122],pants:[61,79,90],cuff:[110,59,72],scarf:[170,124,76]},
   elder:{jacket:[77,100,107],light:[107,128,130],pants:[75,76,70],hair:[171,169,157],scarf:[129,125,109]},
   child:{jacket:[216,148,64],light:[242,183,87],pants:[62,92,110],cuff:[160,103,53]}
  };
- const rings=Array.from({length:13},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
+ const rings=Array.from({length:15},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
  function draw(face,world,pose,mode,hurt=false,outfit){
   const F=outfit?{...fabric,...outfits[outfit]}:fabric, orange=hurt?[224,104,79]:F.jacket;
-  const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum'].includes(outfit);
+  const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum','azure','gold'].includes(outfit);
   const tilt=pose.lean, slant=(p)=>{
    const y=p[1]-1.14,roll=pose.roll;return [p[0]*Math.cos(roll)+y*Math.sin(roll),1.14+y*Math.cos(roll)-p[0]*Math.sin(roll)+pose.bob,p[2]+y*tilt];
   };
@@ -32,6 +34,7 @@ globalThis.WindHiker=(()=>{
   // normals are averaged around each ring instead of shading boxes.
   function loft(rows,c,n=10,bend=null,ao=1){
    if(local)n=Math.min(n,6);
+   else if(hero&&n>=10)n=14;
    const ring=rings[n];
    const q=rows.map(([cx,y,cz,rx,rz])=>ring.map(([x,z])=>{
     const p=[cx+x*rx,y,cz+z*rz];return bend?bend(p):p;
@@ -185,26 +188,30 @@ globalThis.WindHiker=(()=>{
  }
  function create(gaitOffset=0){
   let phase=gaitOffset,blend=0,run=0,mixActivity=0,lastAction='',faceYaw=0;
-  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false,trekking=false}){
+  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false,trekking=false,distance=Math.abs(actualSpeed)*dt,scale=1,jump=null}){
    dt=clamp(dt,0,.08);
    const damp=(k)=>1-Math.exp(-dt*k);
-   const effort=clamp(Math.abs(actualSpeed)/26,0,1.25);
-   blend=mix(blend,moving?Math.max(.08,Math.min(effort+.08,1)):0,damp(15));
+   const rolling=mode!=='walk',stance=.64,stride=rolling?.23:.49;
+   const effort=clamp(Math.abs(actualSpeed)/(rolling?26:2.5),0,1.25);
+   blend=mix(blend,moving?1:0,damp(moving?14:17));
    run=mix(run,clamp((speed-1.015)*6,0,1)*Math.min(1,effort),damp(5));
-   if(moving)phase=(phase+dt*(mode==='walk'?mix(5.9,10.2,effort/1.25):8.5))%TAU;
+   // A full planted stroke moves from +stride to -stride. Advancing this
+   // phase by distance cancels the player's forward motion during stance.
+   if(moving&&jump===null)phase=(phase+(rolling?dt*8.5:distance*TAU*stance/(2*stride*scale)))%TAU;
    if(action)lastAction=action;
    mixActivity=mix(mixActivity,action?1:0,damp(action?8:5));faceYaw=mix(faceYaw,clamp(turn,-.6,.6)*.45,damp(6));
    const actions={rest:lastAction==='rest'?mixActivity:0};
-   const rolling=mode!=='walk', sit=actions.rest, breathing=Math.sin(seconds*2.4);
-   const lean=(rolling?.25:.055+run*.19)*blend,stride=rolling?.23:mix(.39,.49,run);
+   const sit=actions.rest, breathing=Math.sin(seconds*2.4);
+   const tuck=jump===null?0:Math.sin(jump*PI);
+   const lean=(rolling?.25:.055+run*.19)*blend+tuck*.17;
    const swing=Math.cos(phase),bob=(reduced?.38:1)*(-Math.cos(phase*2)*blend*.025+breathing*.009);
    const hips=1.10-sit*.58-(rolling?.08:0)+bob;
    const feet=[];
    const legs=[-1,1].map(sign=>{
-    const t=(phase+(sign===1?PI:0))%TAU/TAU,stance=.64;
+    const t=(phase+(sign===1?PI:0))%TAU/TAU;
     const recovery=clamp((t-stance)/(1-stance),0,1);
     const fore=(t<stance?1-2*t/stance:-Math.cos(recovery*PI))*stride*blend*(1-sit);
-    const lift=Math.sin(recovery*PI)**1.35*blend*(.18+run*.05)*(1-sit);
+    const lift=Math.sin(recovery*PI)**1.2*blend*(.36+run*.07)*(1-sit);
     // Land on the heel, pass through a flat stance, then push off the toe.
     const pitch=rolling?0:(t<stance
      ?.24*Math.max(0,1-t/.14)**2-.43*clamp((t-.44)/(stance-.44),0,1)**2
@@ -214,10 +221,14 @@ globalThis.WindHiker=(()=>{
     const pedal=mode==='bike'?blend:0;
     const foot=[sign*(.153+sit*.086),.123+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift-pivot*Math.sin(pitch)),
      (rolling?.13+pedal*.23*Math.cos(t*TAU):fore)+sit*.56];
+    if(jump!==null){
+     foot[1]=mix(foot[1],.41+tuck*(sign===1?.31:.21),tuck);
+     foot[2]=mix(foot[2],sign===1?.32:-.25,tuck);
+    }
     const hip=[sign*.158,hips,sit*-.11];
     if(rolling||sit>.01)return [hip,[sign*(.168+sit*.074),mix(.59,.35,sit),foot[2]*.65+.12],foot];
     const rise=hip[1]-foot[1],reach=foot[2]-hip[2],distance=Math.hypot(rise,reach)||1;
-    const flex=Math.sqrt(Math.max(0,.53**2-distance**2*.25));
+    const flex=Math.sqrt(Math.max(0,.56**2-distance**2*.25));
     const knee=[sign*.168,(hip[1]+foot[1])*.5+flex*reach/distance,(hip[2]+foot[2])*.5+flex*rise/distance];
     return [hip,knee,foot];
    });
@@ -233,7 +244,7 @@ globalThis.WindHiker=(()=>{
    }
    const poles=trekking&&mode==='walk'&&mixActivity<.10;
    const arms=[-1,1].map(sign=>{
-    const strideZ=swing*sign*stride*blend;
+    const strideZ=swing*sign*stride*blend+tuck*.22;
     const hand=actionHand(sign,[sign*.465,rolling?1.24:poles?1.27:1.085+run*.12,rolling?.49:strideZ+(poles?.21:0)]);
     const elbow=[sign*(.43+(rolling?.03:0)),mix(1.39,(1.54+hand[1])*.5,mixActivity),mix(rolling?.28:strideZ*.49-.066,hand[2]*.5-.08,mixActivity)];
     return [[sign*.347,1.728,0],elbow,hand];

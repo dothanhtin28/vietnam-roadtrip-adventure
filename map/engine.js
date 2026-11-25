@@ -1,6 +1,6 @@
 'use strict';
 globalThis.TripEngine = (() => {
-const {places,roads,modes,geoAnchors,companions,petPrices}=TripData;
+const {places,roads,modes,geoAnchors,legKilometers,companions,petPrices}=TripData;
 const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0},photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
 const clamp=(v)=>Math.max(0,Math.min(v,100));
 const time=mins=>String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
@@ -40,6 +40,8 @@ function pointAt(path,d){
 // the road mesh, speed simulation and grade indicator agree, in both directions.
 const elevations=[12,17,38,66,82,119,138,114];
 const bound=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const jumpHeight=phase=>phase===null||phase<=0||phase>=1?0:4*1.27*phase*(1-phase);
+const obstacleHeight={rock:.82,mud:.22,branch:.58};
 function geoPosition(from,to=from,fraction=0){
  const progress=bound(fraction,0,1);
  return geoAnchors[from].map((coordinate,i)=>coordinate+(geoAnchors[to][i]-coordinate)*progress);
@@ -100,7 +102,7 @@ function pace(plan,d,s,damage=0,direction=1,clock=s.clock){
  const loss=(n,threshold,weight)=>bound((threshold-n)/threshold,0,1)*weight;
  const needs=1-loss(v.health,95,.32)-loss(v.food,72,.23)-loss(v.water,80,.28)-loss(v.energy,85,.16);
  const motor=(plan.mode==='car'||plan.mode==='moto');
- const gradeFactor=bound(slope>0?1/(1+slope*(motor?1.65:plan.mode==='bike'?5.2:3.6)):1-slope*(motor?.7:1.55),.40,1.24);
+ const gradeFactor=bound(slope>0?1/(1+slope*(motor?1.8:plan.mode==='bike'?5.2:3.2)):1-slope*(motor?.55:1.25),.40,motor?1.08:1.12);
  const conditions=weather(clock),weatherFactor=conditions.speed+(motor?(1-conditions.speed)*.38:0);
  const traction=1-conditions.mud*(plan.mode==='bike'?.15:motor?.07:.05);
  return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*Math.max(.26,needs)*weatherFactor*traction};
@@ -113,15 +115,15 @@ function eta(plan,s){
 }
 function trip(from,to,mode){
  const course=profile(from,to), points=course.map(p=>[p.x,p.z]), distance=course.at(-1).d;
- let weighted=0, after=0;const hazards=[];
+ let weighted=0, after=0,km=0;const hazards=[];
  const dir=Math.sign(to-from);
  for(let i=from;i!==to;i+=dir){
   const leg=roads[Math.min(i,i+dir)], len=profile(i,i+dir).at(-1).d;
-  if(leg.hazard)hazards.push({name:leg.hazard,at:after+len*.55});
-  after+=len;weighted+=length(path(i,i+dir))*leg.slope;
+  if(leg.hazard)hazards.push({name:leg.hazard,kind:leg.obstacle,height:obstacleHeight[leg.obstacle],at:after+len*.55});
+  after+=len;weighted+=length(path(i,i+dir))*leg.slope;km+=legKilometers[Math.min(i,i+dir)];
  }
  const v=modes[mode]||modes.walk, motor=v.fuel>0;
- return {points,profile:course,mode,distance,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(weighted/v.time),speed:v.speed,hazards,impact:v.impact};
+ return {points,profile:course,mode,distance,km,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(km*60/v.kmh),speed:v.kmh,hazards,impact:v.impact};
 }
 function apply(s,{food=0,water=0,energy=0,health=0,minutes=0}){
  s.food=clamp(s.food+food);s.water=clamp(s.water+water);s.energy=clamp(s.energy+energy);s.health=clamp(s.health+health);s.clock+=minutes;
@@ -144,11 +146,17 @@ function rescue(s){
  const goal=depots.filter(i=>i!==s.at).sort((a,b)=>length(path(s.at,a))-length(path(s.at,b)))[0], leg=trip(s.at,goal,'walk');
  s.food=Math.max(s.food,leg.food+8);s.water=Math.max(s.water,leg.water+8);s.energy=Math.max(s.energy,leg.energy+8);s.health=Math.max(s.health,15);s.clock+=120;return true;
 }
+const candidateWeights=Object.entries(companions).map(([id,person])=>[id,person.weight??1]);
+const candidateTotal=candidateWeights.reduce((sum,[,w])=>sum+w,0);
+function pickCompanion(random){
+ let choice=random()*candidateTotal;
+ for(const [id,weight] of candidateWeights){choice-=weight;if(choice<0)return id;}
+ return candidateWeights.at(-1)[0];
+}
 function meet(s,random=Math.random){
  const stop=places[s.at],today=day(s);
  if(s.meetings[stop.id]?.day===today)return;
- const candidates=Object.keys(companions);
- const person=s.companion||s.at===0||random()>=.58?null:candidates[Math.floor(random()*candidates.length)];
+ const person=s.companion||s.at===0||random()>=.58?null:pickCompanion(random);
  const strays=Object.keys(petPrices).filter(kind=>s.pets[kind]!==2);
  const stray=stop.pet??(strays.length&&random()<.24?strays[Math.floor(random()*strays.length)]:null);
  s.meetings[stop.id]={day:today,person,stray,invited:false};
@@ -194,7 +202,7 @@ function service(s,a){
  case 'job':{
   if(!at('job'))return 'Chỗ này không có việc làm.';
   if(!canWork(s))return 'Hôm nay đã làm ở quán này hoặc anh cần ăn, uống, nghỉ trước.';
-  s.jobs[place.id]=day(s);s.money+=38;apply(s,{food:-10,water:-12,energy:-18,minutes:90});return 'Phụ quán xong: +38k.';
+  s.money+=38;apply(s,{food:-10,water:-12,energy:-18,minutes:90});s.jobs[place.id]=day(s);return 'Phụ quán xong: +38k.';
  }
  case 'sell': if(at('sell')&&s.bag.fish){const n=s.bag.fish;s.bag.fish=0;s.money+=n*16;return 'Bán '+n+' cá: +'+n*16+'k.';}return 'Cần có cá và tới Chợ Đồng Văn.';
  case 'photo': if(place.photo&&!s.photos.includes(place.id)){s.photos.push(place.id);return 'Đã lưu ảnh '+place.name+' · '+s.photos.length+'/3.';}return 'Điểm này đã lưu hoặc không có ảnh.';
@@ -230,5 +238,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet};
+return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight};
 })();

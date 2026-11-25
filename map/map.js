@@ -18,10 +18,12 @@ let s=load(),selected=s.at, travel=null, cast=null, last=0, hit=0, scale=1, tx=0
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
 let in3d=false,geographic=false,orbit=0,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
-let throttleRamp=0,lastThrottle=0,actualSpeed=0;
+let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
+const jumpDuration=.86;
+const worldUnitsPerKmh=.44;
 const keys=new Set(),buttons=new Map(),inputs={w:'forward',ArrowUp:'forward',s:'back',ArrowDown:'back',a:'left',ArrowLeft:'left',d:'right',ArrowRight:'right'};
 const pressing=dir=>[...keys].some(k=>inputs[k]===dir)||[...buttons.values()].includes(dir);
-function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;}
+function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;jump=null;jumpRequested=false;}
 function roadPoint(plan,d,offset){
  const p=E.sample(plan.profile,d),a=E.sample(plan.profile,d-2),b=E.sample(plan.profile,d+2),n=Math.hypot(b.x-a.x,b.z-a.z)||1;
  return {...p,x:p.x+(b.z-a.z)/n*offset,z:p.z-(b.x-a.x)/n*offset};
@@ -61,9 +63,14 @@ $('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43
 const canvas=$('canvas3d');
 function drivingKey(e){return inputs[e.key.length===1?e.key.toLowerCase():e.key];}
 window.addEventListener('keydown',e=>{
- if(!in3d||e.ctrlKey||e.metaKey||e.altKey||!drivingKey(e)||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
+ if(!in3d||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
+ if(e.key===' '&&!e.target?.closest?.('button,a')){
+  e.preventDefault();if(!e.repeat)jumpRequested=true;return;
+ }
+ if(!drivingKey(e))return;
  e.preventDefault();keys.add(e.key.length===1?e.key.toLowerCase():e.key);
 });
+$('jump').onclick=()=>{jumpRequested=true;};
 window.addEventListener('keyup',e=>{keys.delete(e.key.length===1?e.key.toLowerCase():e.key);});
 window.addEventListener('blur',clearDrive);
 for(const dir of ['left','forward','back','right']){
@@ -86,13 +93,17 @@ function updateStats(){
  const t=travel,clock=Math.floor(gameClock()),weather=E.weather(clock);
  $('clock').textContent='N'+E.day({clock})+' · '+E.time(clock);
  $('pace-weather').textContent=weather.label+(weather.mud?' · Đường lầy':'');
+ const remaining=t&&t.plan.hazards[t.nextHazard]?t.plan.hazards[t.nextHazard].at-t.d:Infinity;
+ $('pace-obstacle').textContent=s.mode==='walk'&&remaining>=0&&remaining<=4?(remaining<=2.55?'Nhảy · Space':'Chuẩn bị nhảy'):'';
  if(t){
-  const g=E.pace(t.plan,t.d,s,t.damage,t.throttle,clock), pct=Math.round(g.speed/t.plan.speed*100), slope=Math.round(g.slope*100);
-  $('pace-speed').textContent=motion?'Nhịp '+pct+'%':'Đang dừng';
+  const g=E.pace(t.plan,t.d,s,t.damage,t.throttle,clock),slope=Math.round(g.slope*100);
+  const km=t.plan.km*(t.d/t.plan.distance);
+  $('pace-speed').textContent=jump?'Đang nhảy':speedKmh>.05?speedKmh.toFixed(1).replace('.',',')+' km/h':'Đang dừng';
+  $('pace-distance').textContent=km.toFixed(1).replace('.',',')+' / '+t.plan.km+' km';
   $('pace-grade').textContent=Math.abs(slope)<2?'Đường bằng':(slope>0?'Lên dốc +':'Xuống dốc ')+slope+'%';
   $('pace-shape').textContent='Thể trạng '+Math.round(g.needs*100)+'%';
   meters(E.condition(s,t.plan,t.d,t.damage));
- }else{$('pace-speed').textContent='Đang dừng';$('pace-grade').textContent='';$('pace-shape').textContent='';meters(s);}
+ }else{$('pace-speed').textContent=jump?'Đang nhảy':'Đang dừng';$('pace-grade').textContent='';$('pace-shape').textContent='';$('pace-distance').textContent='';meters(s);}
 }
 let miniCourse=null;
 function drawScene(ms){
@@ -104,7 +115,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:s.mode,moving:motion,offset:aside,speed:speedPose,actualSpeed,steer:steerPose,seconds:ms/1000,orbit,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:s.mode,moving:motion,offset:aside,speed:speedPose,actualSpeed,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -243,6 +254,7 @@ function trailGuide(){
  const button=(text,fn)=>{const b=dom('button',text);b.type='button';b.addEventListener('click',fn);actions.append(b);};
  const t=travel, next=s.at===places.length-1?s.at-1:s.at+1;
  actions.replaceChildren();$('drive-controls').hidden=!in3d||Boolean(cast);
+ $('jump').hidden=s.mode!=='walk';
  if(cast){
   label.textContent='ĐANG CÂU CÁ';title.textContent='Canh phao chìm';detail.textContent='Khi nhật ký báo phao chìm, bấm Giật cần.';
   button('Giật cần',catchNow);return;
@@ -253,9 +265,10 @@ function trailGuide(){
   if(scene)button('Về 3D',()=>setView(true));return;
  }
  label.textContent=t?'TRÊN ĐƯỜNG':s.at===places.length-1?'CUỐI TUYẾN':'CHẶNG TIẾP THEO';
- title.textContent=places[t?.to??next].name;
- detail.textContent=t?'W/S tiến hoặc lùi · A/D né sang hai bên · Nhả phím để dừng.':
-  s.at===places.length-1?'Giữ S hoặc ▼ để đi về phía Chợ Đồng Văn.':'Giữ W hoặc ▲ để đi tiếp · A/D để lái · S hoặc ▼ để lùi.';
+ const destination=t?.to??next,kilometers=t?.plan.km??TripData.legKilometers[Math.min(s.at,destination)];
+ title.textContent=places[destination].name+' · khoảng '+kilometers+' km';
+ detail.textContent=s.at===places.length-1&&!t?'Giữ S hoặc ▼ để đi về phía Chợ Đồng Văn.':
+  s.mode==='walk'?'W/S tiến hoặc lùi · A/D né · Space hoặc Nhảy để vượt chướng ngại.':'W/S tiến hoặc lùi · A/D né sang hai bên.';
 }
 function render(){
  const p=places[selected],local=selected===s.at;
@@ -282,7 +295,13 @@ function render(){
   if(p.services?.includes('sell'))action('Bán '+s.bag.fish+' cá · '+s.bag.fish*16+'k',()=>service('sell'),!s.bag.fish);
   const encounter=E.encounter(s),person=companions[encounter?.person],pet=E.localPet(s);
   if(person&&!s.companion&&!encounter.invited){
-   const description=dom('p',person.name+' · '+person.bio);description.className='encounter';$('actions').append(description);
+   const description=dom('p',person.name+' · '+person.bio);
+   const card=dom('div');card.className='encounter';
+   if(person.portrait){
+    const portrait=dom('img');portrait.src=person.portrait;portrait.alt='Chân dung '+person.name;portrait.width=68;portrait.height=68;
+    card.append(portrait);
+   }
+   card.append(description);$('actions').append(card);
    action('Rủ '+person.name+' đi cùng',()=>{say(E.invite(s));save();render();});
   }
   if(s.companion)action('Chia tay '+companions[s.companion].name,()=>{say(companions[s.companion].name+' đã tách đoàn.');s.companion=null;save();render();});
@@ -310,38 +329,55 @@ function render(){
 function loop(ms){
  const dt=Math.min(.075,Math.max(0,(ms-(last||ms))/1000));last=ms;
  const drive=in3d&&!cast?Number(pressing('forward'))-Number(pressing('back')):0;
- motion=false;actualSpeed=0;
+ motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);
  const steering=travel&&in3d?Number(pressing('right'))-Number(pressing('left')):0;
  steerPose+=(steering-steerPose)*(1-Math.exp(-dt*13));
- const throttle=travel?drive*travel.direction:0;
+ const input=travel?drive*travel.direction:0;
+ if(jumpRequested&&in3d&&!cast&&s.mode==='walk'&&!jump&&(!activity||ms>=activity.until)&&(!travel||ms>=travel.holdUntil)){
+  jump={phase:0,direction:input};
+ }
+ jumpRequested=false;
+ const oldJump=jump?.phase??null;
+ if(jump){jump.phase+=dt/jumpDuration;if(jump.phase>=1)jump=null;}
+ const throttle=jump?jump.direction:input;
  if(!throttle||throttle!==lastThrottle)throttleRamp=0;
  lastThrottle=throttle;
  if(travel&&in3d){
   const t=travel,prior=t.d,clock=gameClock(),weather=E.weather(clock);
-  aside=Math.max(-5.6,Math.min(5.6,aside+steering*(3.5+3.2*Math.abs(steerPose))*(1-.18*weather.mud)*dt));
-  if(drive&&ms>=t.holdUntil){
+  const oldOffset=aside;
+  const lateral=s.mode==='walk'?1.95:3.5+3.2*Math.abs(steerPose);
+  aside=Math.max(-5.6,Math.min(5.6,aside+steering*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
+  motion=aside!==oldOffset;
+  if(throttle&&ms>=t.holdUntil){
    t.throttle=throttle;
    const qty=E.pace(t.plan,t.d,s,t.damage,throttle,clock);speedPose=qty.speed/t.plan.speed;
    throttleRamp=Math.min(1,throttleRamp+dt/(s.mode==='walk'?.29:.49));
-   const speed=qty.speed*(s.mode==='walk'?.27:.32)*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle<0?.58:1)*(Math.abs(aside)>3.7?.76:1);
+   const strideSpeed=qty.speed*worldUnitsPerKmh;
+   const groundedSpeed=strideSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle<0?.58:1)*(Math.abs(aside)>3.7?.76:1);
+   const speed=jump?Math.max(groundedSpeed,5.15*(1-weather.mud*.15)):groundedSpeed;
    t.d=Math.max(0,Math.min(t.plan.distance,t.d+throttle*speed*dt));
-   motion=t.d!==prior;
+   motion=motion||t.d!==prior;
    actualSpeed=dt?(t.d-prior)/dt:0;
+   speedKmh=Math.abs(actualSpeed)/worldUnitsPerKmh;
    const next=t.plan.hazards[t.nextHazard];
-   if(next&&!t.warned&&next.at-t.d<36){
-    t.warned=true;say(next.name+' phía trước. Né hẳn sang trái hoặc phải bằng A/D.');
+   if(next&&!t.warned&&next.at-t.d<(s.mode==='walk'?10:36)){
+    t.warned=true;say(next.name+' phía trước. '+(s.mode==='walk'?'Nhảy khi hiện nhắc Space, hoặc né bằng A/D.':'Né hẳn sang trái hoặc phải bằng A/D.'));
    }
    if(next&&prior<next.at&&t.d>=next.at){
     t.nextHazard++;
-    if(Math.abs(aside)<(s.mode==='car'?3.35:2.4)){
+    const crossing=(next.at-prior)/(t.d-prior);
+    const height=oldJump===null?0:E.jumpHeight(oldJump+crossing*dt/jumpDuration);
+    if(Math.abs(aside)>=(s.mode==='car'?3.35:2.4))say('Đã né được chướng ngại.');
+    else if(height>=next.height)say('Đã nhảy qua chướng ngại.');
+    else{
      const damage=Math.min(t.plan.impact,Math.max(0,s.health-t.damage-1));
-     t.damage+=damage;hit=performance.now()+700;t.holdUntil=ms+600;throttleRamp=0;
+     t.damage+=damage;hit=performance.now()+700;t.holdUntil=ms+600;throttleRamp=0;jump=null;
      say('Va chạm! −'+damage+' máu. Anh có thể đi tiếp sau khi đứng lại một nhịp.');
-    }else say('Đã né được chướng ngại.');
+    }
    }
-   t.roadMinutes+=t.plan.minutes*Math.abs(t.d-prior)/t.plan.distance*t.plan.speed/qty.speed;
+   if(speedKmh>0)t.roadMinutes+=60*t.plan.km*Math.abs(t.d-prior)/(t.plan.distance*Math.min(speedKmh,qty.speed));
    if(t.d>=t.plan.distance)finishTravel();
    else if(t.d===0&&throttle<0){
     s.health=Math.max(1,s.health-t.damage);s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;

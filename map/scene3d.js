@@ -1,7 +1,7 @@
 'use strict';
 globalThis.TripScene3D = (() => {
 const E=TripEngine, D=TripData, full=E.profile(0,D.places.length-1);
-const cap=(n,a,b)=>Math.min(b,Math.max(a,n)), mix=(a,b,t)=>a+(b-a)*t;
+const cap=(n,a,b)=>Math.min(b,Math.max(a,n)), mix=(a,b,t)=>a+(b-a)*t, TAU=2*Math.PI;
 const rand=n=>((Math.sin(n*81.28+91.4)*43581.781)%1+1)%1;
 const fog=[191,214,203], prairie=[111,143,79], rock=[113,128,109];
 const add=(p,x,y,z)=>({x:p.x+x,h:p.h+y,z:p.z+z});
@@ -108,14 +108,18 @@ function attach(canvas){
  let ctx=null;
  try{ctx=canvas.getContext('2d',{alpha:false});}catch{}
  if(!ctx)return null;
- let angle=null,camera=null,lastFrame=null,actorYaw=null,zoom=1,wheelAngle=0,backwards=false,wet=null,rain=null,heat=null,dark=null;
+ let angle=null,camera=null,lastFrame=null,actorYaw=null,actorPosition=null,zoom=1,wheelAngle=0,backwards=false,wet=null,rain=null,heat=null,dark=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
  const image=src=>{
   if(typeof Image==='undefined')return null;
   const bitmap=new Image();bitmap.src=src;return bitmap;
  };
  const panorama=image('assets/ha-giang-panorama.webp'),terraces=image('assets/rice-terraces.webp'),tree=image('assets/cypress.webp');
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const house=image('assets/village-house.webp');
+ const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
+ const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
+ let grassPattern,dirtPattern;
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
@@ -124,6 +128,8 @@ function attach(canvas){
   const direction=Math.atan2(b.x-a.x,b.z-a.z);
   const pos=add(base,Math.cos(direction)*offset,0,-Math.sin(direction)*offset);
   if(Math.abs(offset)>3.5)pos.h=Math.max(base.h-.2,land(pos.x,pos.z));
+  const dx=actorPosition?pos.x-actorPosition.x:0,dz=actorPosition?pos.z-actorPosition.z:0,distance=Math.hypot(dx,dz);
+  actorPosition=pos;
   const dt=lastFrame===null?.033:cap(seconds-lastFrame,0,.08);lastFrame=seconds;
   const weatherMix=(current,next)=>current===null?next:mix(current,next,1-Math.exp(-dt*2.4));
   const minute=clock%1440,dusk=Math.max(1-cap((minute-300)/125,0,1),cap((minute-1020)/125,0,1));
@@ -133,13 +139,13 @@ function attach(canvas){
   const angular=(old,want,alpha)=>old===null?want:old+Math.atan2(Math.sin(want-old),Math.cos(want-old))*alpha;
   if(actualSpeed!==0)backwards=actualSpeed<0;
   if(!moving&&d===0)backwards=false;
-  const target=direction+orbit;
+  const target=direction+orbit+(mode==='walk'?.32:0);
   angle=angular(angle,target,1-Math.exp(-dt*5.5));
-  const facing=direction+(backwards&&mode==='walk'?Math.PI:0);
-  actorYaw=angular(actorYaw,facing+steer*.31,1-Math.exp(-dt*10));
+  const facing=mode==='walk'&&moving&&distance>.001?Math.atan2(dx,dz):direction+(backwards&&mode==='walk'?Math.PI:0);
+  actorYaw=angular(actorYaw,facing+(mode==='walk'?0:steer*.31),1-Math.exp(-dt*10));
   const heading=actorYaw,fx=Math.sin(angle),fz=Math.cos(angle),rx=fz,rz=-fx;
-  const follow=mode==='car'?10.1:mode==='walk'?7.45:8.6;
-  const want={x:pos.x-fx*follow+rx*.42,h:pos.h+(mode==='car'?3.65:2.95),z:pos.z-fz*follow+rz*.42};
+  const follow=mode==='car'?10.1:mode==='walk'?8.65:8.6;
+  const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
   want.h=Math.max(want.h,land(want.x,want.z)+1.8);
   if(!camera||Math.hypot(want.x-camera.x,want.z-camera.z)>24)camera=want;
   else{const a=1-Math.exp(-dt*12);camera={x:mix(camera.x,want.x,a),h:mix(camera.h,want.h,a*.82),z:mix(camera.z,want.z,a)};}
@@ -184,20 +190,37 @@ function attach(canvas){
    return [x*rx+z*rz,y*cp+f*sp,f*cp-y*sp];
   };
   const near=1.25, faces=[];let layer=0;
-  function face(points,c,shade=1,bias=0){
+  if(!grassPattern&&grass?.naturalWidth)grassPattern=ctx.createPattern(grass,'repeat');
+  if(!dirtPattern&&dirt?.naturalWidth)dirtPattern=ctx.createPattern(dirt,'repeat');
+  function face(points,c,shade=1,bias=0,pattern=null){
    const ps=points.map(tr);if(ps.every(v=>v[2]<near)||ps.every(v=>v[2]>385))return;
+   if(pattern)ps.forEach((p,i)=>{p[3]=points[i].x;p[4]=points[i].z;});
    const clipped=[];
    for(let i=0;i<ps.length;i++){
     const a=ps[i],b=ps[(i+1)%ps.length],ain=a[2]>=near,bin=b[2]>=near;
     if(ain)clipped.push(a);
-    if(ain!==bin){const t=(near-a[2])/(b[2]-a[2]);clipped.push([mix(a[0],b[0],t),mix(a[1],b[1],t),near]);}
+    if(ain!==bin){
+     const t=(near-a[2])/(b[2]-a[2]),p=[mix(a[0],b[0],t),mix(a[1],b[1],t),near];
+     if(pattern)p.push(mix(a[3],b[3],t),mix(a[4],b[4],t));
+     clipped.push(p);
+    }
    }
    if(clipped.length<3)return;
    const depth=clipped.reduce((n,p)=>n+p[2],0)/clipped.length, haze=cap((depth-35)/325,0,.86);
    const screen=clipped.map(([x,y,z])=>[W*.5+x*focal/z,horizon-y*focal/z]);
    if(screen.every(p=>p[0]<-4)||screen.every(p=>p[0]>W+4)||screen.every(p=>p[1]<-4)||screen.every(p=>p[1]>H+4))return;
    const opacity=layer===0&&panorama?.naturalWidth?1-cap((depth-75)/175,0,.87):1;
-   faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',depth:depth+bias,layer,opacity});
+   faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',
+    depth:depth+bias,layer,opacity,pattern,uv:pattern?clipped.map(p=>[p[3]*52,p[4]*52]):null});
+  }
+  function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1}={}){
+   if(!bitmap?.naturalWidth)return false;
+   const [x,y,depth]=tr(p);
+   if(depth<=near||depth>165)return true;
+   const h=height*focal/depth,w=h*bitmap.naturalWidth/bitmap.naturalHeight;
+   const left=W*.5+x*focal/depth-w*.5,top=horizon-y*focal/depth-h;
+   if(left<W&&left+w>0&&top<H&&top+h>0)faces.push({sprite:bitmap,left,top,width:w,height:h,flip,sway,opacity,layer,depth});
+   return true;
   }
   const baseX=Math.floor(cam.x/STEP)*STEP,baseZ=Math.floor(cam.z/STEP)*STEP;
   for(let oz=-19;oz<=19;oz++)for(let ox=-19;ox<=19;ox++){
@@ -207,8 +230,18 @@ function attach(canvas){
    const tint=cap((q[0].h-38)/165,0,.92),color=prairie.map((n,j)=>mix(n,rock[j],tint));
    const light=cap(1+(q[1].h-q[0].h)*.013-(q[3].h-q[0].h)*.010,.79,1.19);
    const mottling=.95+rand(x*11+z)*.11;
-   face([q[0],q[1],q[2]],color,light*mottling);
-   face([q[0],q[2],q[3]],color,light*mottling);
+   if(grassPattern&&Math.hypot(cx,cz)<32){
+    const step=STEP/3;
+    for(let a=0;a<3;a++)for(let b=0;b<3;b++){
+     const gx=x+a*step,gz=z+b*step;
+     const p=[grid(gx,gz),grid(gx+step,gz),grid(gx+step,gz+step),grid(gx,gz+step)];
+     face([p[0],p[1],p[2]],color,light*mottling,0,grassPattern);
+     face([p[0],p[2],p[3]],color,light*mottling,0,grassPattern);
+    }
+   }else{
+    face([q[0],q[1],q[2]],color,light*mottling);
+    face([q[0],q[2],q[3]],color,light*mottling);
+   }
   }
   layer=.65;
   for(const farm of farms){
@@ -236,12 +269,31 @@ function attach(canvas){
   layer=1;
   const road=[175-67*wet,154-61*wet,112-39*wet],track=[181-83*wet,158-68*wet,115-46*wet];
   const strip=(s,w,h)=>add(s.p,s.nx*w,h,s.nz*w);
+  const between=(a,b,t)=>add(a,(b.x-a.x)*t,(b.h-a.h)*t,(b.z-a.z)*t);
+  function surface(a,b,c,d,color,light,bias,pattern,steps){
+   for(let i=0;i<steps;i++){
+    const t=i/steps,u=(i+1)/steps;
+    const p=between(a,b,t),q=between(a,b,u),r=between(d,c,u),s=between(d,c,t);
+    for(let j=0;j<steps;j++){
+     const t=j/steps,u=(j+1)/steps;
+     const a=between(p,s,t),b=between(q,r,t),c=between(q,r,u),d=between(p,s,u);
+     face([a,b,c],color,light,bias,pattern);face([a,c,d],color,light,bias,pattern);
+    }
+   }
+  }
   for(let i=1;i<shoulders.length;i++){
    const a=shoulders[i-1],b=shoulders[i];
-   if(Math.hypot(a.p.x-cam.x,a.p.z-cam.z)>190)continue;
-   face([strip(a,-4.72,.06),strip(a,4.72,.06),strip(b,4.72,.06),strip(b,-4.72,.06)],[142,132,94],1,-3);
-   face([strip(a,-3.56,.13),strip(a,3.56,.13),strip(b,3.56,.13),strip(b,-3.56,.13)],road,.96+rand(i)*.07,-3.14);
+   const distance=Math.hypot(a.p.x-cam.x,a.p.z-cam.z);
+   if(distance>190)continue;
+   const width=s=>3.48+Math.sin(s.d*.16)*.18+Math.sin(s.d*.49)*.07;
+   const edgeA=width(a),edgeB=width(b);
+   const pattern=distance<44?dirtPattern:null,shoulder=distance<38?grassPattern:null;
    for(const side of [-1,1]){
+    surface(strip(a,side*(edgeA+.52),.09),strip(a,side*edgeA,.12),strip(b,side*edgeB,.12),strip(b,side*(edgeB+.52),.09),
+     [128-25*wet,130-24*wet,80-12*wet],1,-3.09,shoulder,1);
+   }
+   surface(strip(a,-edgeA,.13),strip(a,edgeA,.13),strip(b,edgeB,.13),strip(b,-edgeB,.13),road,.98+rand(i)*.032,-3.14,pattern,pattern&&distance<22?3:1);
+   if(!pattern||wet>.18)for(const side of [-1,1]){
     const left=side*1.55-.4,right=side*1.55+.4;
     face([strip(a,left,.16),strip(a,right,.16),strip(b,right,.16),strip(b,left,.16)],track,.98+rand(i+side)*.045,-3.23);
    }
@@ -269,10 +321,13 @@ function attach(canvas){
     continue;
    }
    const breeze=reduced?0:Math.sin(seconds*2.7+p.seed*.54)*.21*gust;
-   for(let i=-1;i<=1;i++){
-    const h=p.size*(1-Math.abs(i)*.21),s=i*.23;
-    const color=p.seed%5===0?[194,165,87]:[92,129,61];
-    face([add(p,s-.11,0,i*.12),add(p,s+.09,0,i*.12),add(p,s*2+breeze,h,i*.19)],color,1+i*.09);
+   const count=depth<25?7:4;
+   for(let i=0;i<count;i++){
+    const phi=i*2.4+p.seed,h=p.size*(.41+rand(p.seed+i)*.58),x=Math.cos(phi),z=Math.sin(phi);
+    const color=p.seed%5===0&&i%3===0?[190,163,90]:[[79,107,55],[114,139,72],[131,150,78]][i%3];
+    const root=add(p,x*.12,0,z*.12),bend=add(p,x*.22+breeze*.5,h*.58,z*.22),tip=add(p,x*.47+breeze,h,z*.47);
+    face([add(root,-z*.045,0,x*.045),add(root,z*.04,0,-x*.04),add(bend,z*.027,0,-x*.027),add(bend,-z*.027,0,x*.027)],color);
+    face([add(bend,-z*.027,0,x*.027),add(bend,z*.027,0,-x*.027),tip],color,1.08);
    }
   }
   for(const p of plants){
@@ -300,6 +355,7 @@ function attach(canvas){
   }
   for(const p of houses){
    if(Math.hypot(p.x-cam.x,p.z-cam.z)>180)continue;
+   if(billboard(house,p,p.w*1.06,{flip:p.tint===1,opacity:1-cap((Math.hypot(p.x-cam.x,p.z-cam.z)-88)/142,0,.62)}))continue;
    const w=p.w,yaw=p.yaw;
    const wall=[[224,194,146],[202,181,146],[187,163,135]][p.tint];
    box(p,w,w*.68,w*1.3,yaw,wall);
@@ -324,7 +380,14 @@ function attach(canvas){
   }
   if(hazard&&hazard.at>=d-5&&hazard.at<d+165){
    const p=E.sample(route,hazard.at);
-   box(p,3,1.05,2.4,heading+.6,[116,106,87],0,-1.35);box(add(p,.75,0,.45),1.35,1.45,1.75,heading+.1,[151,130,104],0,-1.35);
+   const h=hazard.height??.82;
+   if(hazard.kind==='mud')box(p,3.0,.07,1.65,direction,[97,81,55],.16,-1.35);
+   else if(hazard.kind==='branch')box(p,3.0,h-.13,.72,direction+.14,[99,72,45],.13,-1.35);
+   else{
+    const rim=Array.from({length:7},(_,i)=>add(p,Math.cos(i*TAU/7)*(1.15+rand(i)*.4),.14,Math.sin(i*TAU/7)*.84));
+    const crown=add(p,.26,h,.17);
+    for(let i=0;i<rim.length;i++)face([rim[i],rim[(i+1)%rim.length],crown],[116,111,97],.79+rand(i*9)*.4,-1.35);
+   }
   }
   const shift=(p,x,y,z)=>add(p,x*Math.cos(heading)+z*Math.sin(heading),y,z*Math.cos(heading)-x*Math.sin(heading));
   const ink=[52,70,65];
@@ -366,10 +429,12 @@ function attach(canvas){
     box(shift(pos,0,0,-.25),.33,.105,.44,heading,[58,63,51],.96,-1.5);
     box(shift(pos,0,0,.79),.69,.077,.074,heading,[75,81,65],1.11,-1.5);
    }
-   const pose=actor.pose({moving,mode,speed,actualSpeed,seconds,dt,action,actionTime,turn:steer,reduced,trekking:true});
-   const grade=E.grade(route,d)*(backwards?-1:1);
+   const scale=mode==='walk'?1.20:1;
+   const pose=actor.pose({moving,mode,speed,actualSpeed,distance,scale,jump,seconds,dt,action,actionTime,turn:steer,reduced,trekking:true});
+   const grade=E.grade(route,d)*Math.cos(direction-heading);
    const footing=mode==='walk'?.14:0;
-   WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),([x,y,z])=>shift(pos,x,y+footing+z*grade,z),pose,mode,damage);
+   const lift=E.jumpHeight(jump);
+   WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage);
   }
   if(companion&&mode==='walk'){
    const trail=E.sample(route,d-(backwards?-3.4:3.4));
@@ -381,6 +446,7 @@ function attach(canvas){
    const {x,z,angle,size,phase,rig,outfit}=resident;
    const [lateral,,depth]=tr({x,z,h:cam.h});
    if(depth<near||depth>60||Math.abs(lateral)>10+depth*.85)continue;
+   if(billboard(localImages[outfit],{x,z,h:land(x,z)+.07},2.46*size,{flip:Math.sin(angle)>0}))continue;
    const speed=outfit==='child'?1.8:outfit==='elder'?.35:.63;
    const step=phase+(reduced?0:seconds*speed*.35),stride=Math.cos(step),wave=Math.sin(step);
    const walking=!reduced&&Math.abs(stride)*speed>.13;
@@ -411,6 +477,22 @@ function attach(canvas){
    const tail=shift(p,0,.43*size,-.35*size),tip=shift(p,Math.sin(seconds*4)*.12,.77*size,-.72*size);
    face([add(tail,-.06,0,0),add(tail,.06,.045,0),add(tip,.036,0,0),add(tip,-.036,0,0)],color,.9,-3.9);
   });
+  function drawMaterial(f){
+   const [[u0,v0],[u1,v1],[u2,v2]]=f.uv;
+   const [[x0,y0],[x1,y1],[x2,y2]]=f.screen;
+   const du1=u1-u0,dv1=v1-v0,du2=u2-u0,dv2=v2-v0;
+   const determinant=du1*dv2-du2*dv1;
+   if(Math.abs(determinant)<.01)return;
+   const ax=((x1-x0)*dv2-(x2-x0)*dv1)/determinant;
+   const ay=((y1-y0)*dv2-(y2-y0)*dv1)/determinant;
+   const bx=(du1*(x2-x0)-du2*(x1-x0))/determinant;
+   const by=(du1*(y2-y0)-du2*(y1-y0))/determinant;
+   ctx.save();
+   ctx.globalAlpha=cap((48-f.depth)/22,0,.82)*(f.layer===1?1-wet*.60:1);
+   ctx.transform(ax,ay,bx,by,x0-ax*u0-bx*v0,y0-ay*u0-by*v0);
+   ctx.fillStyle=f.pattern;ctx.fill();
+   ctx.restore();
+  }
   faces.sort((a,b)=>a.layer-b.layer||b.depth-a.depth);
   for(const f of faces){
    if(f.sprite){
@@ -430,6 +512,7 @@ function attach(canvas){
     ctx.fill();
     if(f.layer<=1.5){ctx.strokeStyle=f.color;ctx.lineWidth=.53;ctx.stroke();}
    }
+   if(f.pattern)drawMaterial(f);
   }
   if(heat>.02){
    ctx.fillStyle='rgba(248,195,101,'+heat*.13+')';ctx.fillRect(0,0,W,H);
@@ -450,7 +533,7 @@ function attach(canvas){
    }
   }
  };
- return {render,reset:()=>{angle=null;camera=null;actorYaw=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;backwards=false;actor.reset();follower.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;actorYaw=null;actorPosition=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;backwards=false;actor.reset();follower.reset();}};
 }
 return {attach,land};
 })();
