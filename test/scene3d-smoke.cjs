@@ -23,7 +23,7 @@ assert(E.arrive(st,1,end,28,10,mins));assert.equal(st.clock,start+mins+28);asser
 let polygons=0,keyframes=[];
 const check=(...coords)=>assert(coords.every(Number.isFinite));
 const ctx={beginPath(){},closePath(){},fill(){polygons++;},
- stroke(){},arc:check,moveTo:check,lineTo:check,fillRect:check,createLinearGradient(){return {addColorStop(){}};},
+ save(){},restore(){},stroke(){},arc:check,moveTo:check,lineTo:check,fillRect:check,createLinearGradient(){return {addColorStop(){}};},
  set fillStyle(v){keyframes.push(v);},set strokeStyle(v){},set lineWidth(v){}};
 const canvas={getContext:()=>ctx,getBoundingClientRect:()=>({width:880,height:540})};
 const scene=S.attach(canvas);assert(scene&&S.attach({getContext:()=>null})===null);
@@ -35,6 +35,12 @@ for(const [idx,mode] of ['walk','bike','moto','car'].entries()){
  assert(keyframes.some(k=>typeof k==='string'&&k.startsWith('rgb(')));
 }
 assert(Number.isFinite(S.land(580,420)));
+const [riverX,riverZ]=c.TripData.riverPath[4],ledge=E.profile(7,8);
+assert(S.land(riverX,riverZ)+50<S.land(ledge[0].x,ledge[0].z));
+scene.reset();polygons=0;
+scene.render({route:ledge,d:4,camping:true,look:.5,clock:1260,seconds:2});
+assert(polygons>150);
+scene.render({route:E.profile(0,1),d:20,mode:'cart',moving:true,actualSpeed:3,seconds:3});
 const Rig=c.WindHiker, rig=Rig.create();
 const gait=Array.from({length:100},()=>rig.pose({moving:true,speed:.98,actualSpeed:2.5,dt:1/60}));
 assert(gait.some(p=>p.feet[0]>.12),'Walking should land heel-first');

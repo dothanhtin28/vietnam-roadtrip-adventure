@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const {places,roads,modes,companions,petPrices}=TripData,E=TripEngine,key='wind-trip-map-v1';
+const {places,roads,modes,companions,petPrices,riverPath,cartFare,energyDrinkPrice,forage}=TripData,E=TripEngine,key='wind-trip-map-v1';
 const $=id=>document.getElementById(id),vp=$('viewport'),world=$('world'),marker=$('marker');
 const dom=(tag,text='')=>{const e=document.createElement(tag);e.textContent=text;return e;};
 function load(){
@@ -9,6 +9,10 @@ function load(){
   if(s&&Number.isInteger(s.at)&&places[s.at]&&Object.hasOwn(modes,s.mode)&&['food','water','energy','health','money','clock','casts'].every(k=>Number.isFinite(s[k])&&s[k]>=0)&&Array.isArray(s.photos)&&Array.isArray(s.owned)&&s.owned.includes(s.mode)&&s.pets&&s.jobs&&s.bag&&['meals','bottles','treats','fish','meds'].every(k=>Number.isInteger(s.bag[k])&&s.bag[k]>=0)){
    s.meetings=s.meetings&&typeof s.meetings==='object'&&!Array.isArray(s.meetings)?s.meetings:{};
    s.companion=Object.hasOwn(companions,s.companion)?s.companion:null;
+   for(const item of ['energyDrinks',...Object.keys(forage)])s.bag[item]=Number.isSafeInteger(s.bag[item])&&s.bag[item]>=0?s.bag[item]:0;
+   s.foraged=s.foraged&&typeof s.foraged==='object'&&!Array.isArray(s.foraged)?s.foraged:{};
+   s.boostUntil=Number.isFinite(s.boostUntil)?s.boostUntil:0;
+   s.campAt=s.campAt===s.at&&E.canCamp(s)?s.at:null;
    return s;
   }
  }catch{}
@@ -17,13 +21,18 @@ function load(){
 let s=load(),selected=s.at, travel=null, cast=null, last=0, hit=0, scale=1, tx=0,ty=0, initialized=false;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
-let in3d=false,geographic=false,orbit=0,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
+let in3d=false,geographic=false,orbit=0,look=0,viewpoint=false,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
 let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
+let openHost=null,auto=false;
 const jumpDuration=.86;
 const worldUnitsPerKmh=.44;
 const keys=new Set(),buttons=new Map(),inputs={w:'forward',ArrowUp:'forward',s:'back',ArrowDown:'back',a:'left',ArrowLeft:'left',d:'right',ArrowRight:'right'};
 const pressing=dir=>[...keys].some(k=>inputs[k]===dir)||[...buttons.values()].includes(dir);
-function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;jump=null;jumpRequested=false;}
+function setAuto(on){
+ auto=on;const button=$('auto-walk');
+ button.setAttribute('aria-pressed',String(on));button.textContent=on?'Dừng tự đi':'Tự đi';
+}
+function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;jump=null;jumpRequested=false;setAuto(false);}
 function roadPoint(plan,d,offset){
  const p=E.sample(plan.profile,d),a=E.sample(plan.profile,d-2),b=E.sample(plan.profile,d+2),n=Math.hypot(b.x-a.x,b.z-a.z)||1;
  return {...p,x:p.x+(b.z-a.z)/n*offset,z:p.z-(b.x-a.x)/n*offset};
@@ -32,17 +41,42 @@ const fullRoute=E.profile(0,places.length-1);
 const previewRoute=()=>E.profile(s.at,s.at<places.length-1?s.at+1:s.at-1);
 let idleRoute=previewRoute();
 const gameClock=()=>s.clock+(travel?.roadMinutes??0);
+const activeMode=()=>travel?.plan.mode??s.mode;
+const vitals=['food','water','energy','health'];
+const currentCondition=()=>travel?E.condition(s,travel.plan,travel.d,travel.damage):s;
+function belowAutoThreshold(){
+ const current=currentCondition();
+ return vitals.some(k=>current[k]<30);
+}
+$('auto-walk').onclick=()=>{
+ if(!in3d||cast)return;
+ if(!auto&&s.campAt===s.at){say('Thu lều trước khi lên đường.');return;}
+ if(!auto&&belowAutoThreshold()){say('Tiếp tế để các chỉ số đạt ít nhất 30% rồi bật Tự đi.');return;}
+ setAuto(!auto);
+};
 function livePos(){return travel?roadPoint(travel.plan,travel.d,aside):idleRoute[0];}
-function locateOnGeoMap(){
- const [lat,lon]=travel?E.geoPosition(s.at,travel.to,travel.d/travel.plan.distance):E.geoPosition(s.at);
+function locateOnGeoMap(stop=null){
+ const [lat,lon]=stop!==null?E.geoPosition(stop):travel?E.geoPosition(s.at,travel.to,travel.d/travel.plan.distance):E.geoPosition(s.at);
  const coordinate=[lat,lon].map(n=>n.toFixed(5)).join(',');
- const bounds=[lon-.055,lat-.037,lon+.055,lat+.037].map(n=>n.toFixed(5)).join(',');
+ const isGorge=(stop??s.at)>=6,span=isGorge?.022:.055;
+ const bounds=[lon-span,lat-span*.73,lon+span,lat+span*.73].map(n=>n.toFixed(5)).join(',');
  const frame=$('geo-frame');
  frame.src='https://www.openstreetmap.org/export/embed.html?layer=mapnik&bbox='+encodeURIComponent(bounds)+'&marker='+encodeURIComponent(coordinate);
- $('geo-position').textContent=(travel?places[s.at].name+' → '+places[travel.to].name:places[s.at].name)+' · '+coordinate.replace(',',', ')+' · Vị trí ước tính';
+ const reference=stop!==null?places[stop].name:travel?places[s.at].name+' → '+places[travel.to].name:places[s.at].name;
+ $('geo-position').textContent=reference+' · '+coordinate.replace(',',', ')+' · Vị trí ước tính';
  $('geo-google').href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(coordinate);
+ $('geo-gorge').hidden=!isGorge;
+ if(isGorge){
+  const p=stop===null?livePos():{x:places[stop].x,z:places[stop].y};
+  const track=(a,b)=>E.profile(a,b).map(v=>[v.x,v.z]);
+  $('geo-trace').innerHTML=svgLine(riverPath,'stroke="#398e9a" stroke-width="12"')
+   +svgLine(track(6,7),'stroke="#9f663c" stroke-width="7"')
+   +svgLine(track(7,9),'stroke="#526b41" stroke-width="5" stroke-dasharray="9 6"')
+   +places.slice(7).map(v=>`<circle cx="${v.x}" cy="${v.y}" r="7" fill="#f8efd1" stroke="#395643" stroke-width="3"/>`).join('')
+   +`<circle cx="${p.x}" cy="${p.z}" r="8" fill="#edb34b" stroke="#173b2f" stroke-width="3"/>`;
+ }
 }
-function setView(on,geo=false){
+function setView(on,geo=false,stop=null){
  clearDrive();needRelease=false;
  geographic=geo;
  in3d=Boolean(on&&scene);if(on&&!scene)say('Thiết bị không mở được góc nhìn 3D. Bản đồ vẫn dùng được.');
@@ -50,16 +84,63 @@ function setView(on,geo=false){
  $('geo-panel').hidden=!geo;$('pace').hidden=geo;
  $('map-view').setAttribute('aria-pressed',String(!vp.hidden));$('scene-view').setAttribute('aria-pressed',String(in3d));$('geo-view').setAttribute('aria-pressed',String(geo));
  if(in3d){scene.reset();lastDraw=0;}
- else if(geo)locateOnGeoMap();
+ else if(geo)locateOnGeoMap(stop);
  else if(!geo){const p=livePos();center([p.x,p.z]);}
  trailGuide();
 }
 $('map-view').onclick=()=>setView(false);$('scene-view').onclick=()=>setView(true);
 $('geo-view').onclick=()=>setView(false,true);
-$('geo-locate').onclick=locateOnGeoMap;
+$('geo-locate').onclick=()=>locateOnGeoMap();
 $('mini').onclick=()=>setView(false);
+for(const place of places.slice(7)){
+ const link=dom('a',place.name+' ↗');
+ link.href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(place.name+', Hà Giang');
+ link.target='_blank';link.rel='noopener noreferrer';$('geo-links').append(link);
+}
+const fullscreen=$('fullscreen');
+let nativeFullscreen=false;
+const music=$('music');
+music.onclick=async()=>{
+ music.disabled=true;
+ try{
+  const playing=await globalThis.TripMusic.toggle();
+  music.textContent=playing?'Tắt nhạc nền':'Bật nhạc nền';
+  music.setAttribute('aria-pressed',String(playing));
+ }catch{say('Trình duyệt chưa mở được nhạc nền.');}
+ finally{music.disabled=false;}
+};
+function syncFullscreen(){
+ if(document.fullscreenElement)nativeFullscreen=true;
+ else if(nativeFullscreen){
+  nativeFullscreen=false;
+  document.body.classList.remove('wide-game');
+ }
+ const active=Boolean(document.fullscreenElement||document.body.classList.contains('wide-game'));
+ fullscreen.textContent=active?'Thoát toàn màn hình':'Toàn màn hình';
+ fullscreen.setAttribute('aria-pressed',String(active));
+}
+document.addEventListener?.('fullscreenchange',syncFullscreen);
+fullscreen.onclick=async()=>{
+ if(document.fullscreenElement){await document.exitFullscreen();syncFullscreen();return;}
+ const expanding=document.body.classList.toggle('wide-game');
+ syncFullscreen();
+ if(expanding&&document.fullscreenEnabled&&document.documentElement.requestFullscreen){
+  try{await document.documentElement.requestFullscreen();syncFullscreen();}catch{}
+ }
+};
 const rotate=n=>{orbit=Math.atan2(Math.sin(orbit+n),Math.cos(orbit+n));};
-$('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43);$('orbit-reset').onclick=()=>{orbit=0;};
+const tilt=n=>{look=Math.max(-1.43,Math.min(1.03,look+n));};
+$('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43);$('orbit-reset').onclick=()=>{orbit=0;look=0;viewpoint=false;};
+$('look-up').onclick=()=>tilt(.20);$('look-down').onclick=()=>tilt(-.20);
+function lookAtRiver(){
+ if(!in3d)setView(true);
+ const start=idleRoute[0],ahead=E.sample(idleRoute,9);
+ const nearest=riverPath.reduce((a,b)=>Math.hypot(a[0]-start.x,a[1]-start.z)<Math.hypot(b[0]-start.x,b[1]-start.z)?a:b);
+ const aim=Math.atan2(nearest[0]-start.x,nearest[1]-start.z);
+ orbit=aim-Math.atan2(ahead.x-start.x,ahead.z-start.z)-(s.mode==='walk'?.32:0);
+ const distance=Math.max(12,Math.hypot(nearest[0]-start.x,nearest[1]-start.z)-27);
+ look=.08-Math.atan2(start.h-7,distance);viewpoint=true;
+}
 const canvas=$('canvas3d');
 function drivingKey(e){return inputs[e.key.length===1?e.key.toLowerCase():e.key];}
 window.addEventListener('keydown',e=>{
@@ -83,8 +164,12 @@ for(const dir of ['left','forward','back','right']){
  b.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();release(e);}});
  b.addEventListener('blur',release);
 }
-canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;cameraDrag={id:e.pointerId,x:e.clientX};canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(cameraDrag?.id===e.pointerId){rotate((cameraDrag.x-e.clientX)*.009);cameraDrag.x=e.clientX;}});
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;cameraDrag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{
+ if(cameraDrag?.id!==e.pointerId)return;
+ rotate((cameraDrag.x-e.clientX)*.009);tilt((e.clientY-cameraDrag.y)*.007);
+ cameraDrag.x=e.clientX;cameraDrag.y=e.clientY;
+});
 ['pointerup','pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
 let lastStats=NaN;
 function meters(v){['food','water','energy','health'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
@@ -94,7 +179,8 @@ function updateStats(){
  $('clock').textContent='N'+E.day({clock})+' · '+E.time(clock);
  $('pace-weather').textContent=weather.label+(weather.mud?' · Đường lầy':'');
  const remaining=t&&t.plan.hazards[t.nextHazard]?t.plan.hazards[t.nextHazard].at-t.d:Infinity;
- $('pace-obstacle').textContent=s.mode==='walk'&&remaining>=0&&remaining<=4?(remaining<=2.55?'Nhảy · Space':'Chuẩn bị nhảy'):'';
+ $('pace-obstacle').textContent=activeMode()==='walk'&&remaining>=0&&remaining<=4?(remaining<=2.55?'Nhảy · Space':'Chuẩn bị nhảy'):'';
+ $('pace-boost').textContent=clock<s.boostUntil?'Tăng lực · '+Math.ceil(s.boostUntil-clock)+' phút':'';
  if(t){
   const g=E.pace(t.plan,t.d,s,t.damage,t.throttle,clock),slope=Math.round(g.slope*100);
   const km=t.plan.km*(t.d/t.plan.distance);
@@ -115,7 +201,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:s.mode,moving:motion,offset:aside,speed:speedPose,actualSpeed,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:activeMode(),moving:motion,offset:aside,speed:speedPose,actualSpeed,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -141,7 +227,7 @@ function buildTerrain(){
   return `<rect x="${x}" y="${y}" width="7" height="5" rx="1" fill="#d4ae87" stroke="#9c886c" stroke-width=".7" transform="rotate(18 ${x} ${y})"/>`;
  }).join('')).join('');
  const river='M-20 1005 Q125 930 184 937T283 832 Q284 789 327 763T410 720 Q463 699 492 715 L550 753 Q596 785 660 772T740 822';
- const nho='M1230 -12 Q1200 96 1250 145T1286 256 Q1320 314 1306 365T1337 491 Q1384 564 1418 580';
+ const nho='M'+riverPath.map(p=>p.join(',')).join('L');
  const all=fullRoute.map(p=>[p.x,p.z]);
  $('terrain').innerHTML=`<defs><pattern id="grid" width="90" height="90" patternUnits="userSpaceOnUse"><path d="M90 0H0V90" fill="none" stroke="#7c9c83" stroke-opacity=".27" stroke-width=".8"/></pattern></defs>
  <rect width="1400" height="1020" fill="#c5d3ad"/>${relief}<rect width="1400" height="1020" fill="url(#grid)"/>${trees}${fields}
@@ -209,24 +295,48 @@ function route(plan,progress=0){
 function action(label,fn,disabled=false){
  const b=dom('button',label);b.type='button';b.disabled=disabled;b.addEventListener('click',fn);$('actions').append(b);
 }
-const servicesAnimation={meal:['meal',2.5],drink:['drink',2],nap:['rest',3.2],camp:['rest',3.2],photo:['photo',1.7]};
+const servicesAnimation={meal:['meal',2.5],drink:['drink',2],energyDrink:['drink',2],nap:['rest',3.2],camp:['rest',3.2],photo:['photo',1.7]};
 function service(k){
- const allowed=(k==='meal'&&s.bag.meals)||(k==='drink'&&s.bag.bottles)||k==='nap'||(k==='camp'&&s.money>=15)||(k==='photo'&&places[s.at].photo&&!s.photos.includes(places[s.at].id));
+ const allowed=(k==='meal'&&s.bag.meals)||(k==='drink'&&s.bag.bottles)||(k==='energyDrink'&&s.bag.energyDrinks&&s.clock>=s.boostUntil)||k==='nap'||(k==='camp'&&s.money>=15)||(k==='photo'&&places[s.at].photo&&!s.photos.includes(places[s.at].id));
  say(E.service(s,k));if(allowed&&servicesAnimation[k])animate(...servicesAnimation[k]);save();render();
 }
-function travelStart(direction){
+function useSupply(kind){
+ if(!travel){service(kind);return;}
+ const before=currentCondition(),after={...s,...before};
+ say(E.service(after,kind,gameClock()));
+ for(const stat of vitals)s[stat]+=after[stat]-before[stat];
+ s.boostUntil=after.boostUntil;
+ render();
+}
+function supplyActions(){
+ const v=currentCondition();
+ if(s.bag.meals)action('Ăn cơm',()=>useSupply('meal'),!travel&&v.food===100);
+ if(s.bag.bottles)action('Uống nước',()=>useSupply('drink'),!travel&&v.water===100);
+ if(s.bag.energyDrinks)action('Uống nước tăng lực',()=>useSupply('energyDrink'),!travel&&s.clock<s.boostUntil);
+ if(s.bag.meds)action('Sơ cứu · +45 máu',()=>useSupply('med'),!travel&&v.health===100);
+ for(const [kind,item] of Object.entries(forage)){
+  if(s.bag[kind])action('Ăn '+item.name.toLowerCase()+' · +'+item.food+' no',()=>useSupply(kind),!travel&&v.food===100&&(!item.water||v.water===100));
+ }
+}
+function travelStart(direction,mode=s.mode){
  const to=s.at+direction;if(!places[to]||travel||cast)return;
- const plan=E.trip(s.at,to,s.mode);
+ if(s.campAt===s.at){if(!blocked){blocked='camp';say('Thu lều trước khi lên đường.');}return;}
+ const plan=E.trip(s.at,to,mode);
  if(!E.canTravel(s,plan)){
-  if(blocked!==String(to)){blocked=String(to);say('Chưa đủ no, nước, sức hoặc tiền nhiên liệu để tới '+places[to].name+'. Hãy tiếp tế trước.');}
+  setAuto(false);
+  if(blocked!==String(to)){
+   blocked=String(to);
+   say(plan.footOnly&&mode!=='walk'?'Đường mòn chỉ đi bộ. Hãy đổi sang đi bộ trước khi lên đường.':'Chưa đủ no, nước, sức hoặc tiền cho chặng này. Hãy tiếp tế trước.');
+  }
   return;
  }
- blocked='';activity=null;travel={to,plan,d:0,direction,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false};
- selected=s.at;orbit=0;aside=0;
- say('Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
+ blocked='';activity=null;openHost=null;travel={to,plan,d:0,direction,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup:E.forageSpot(s,s.at,to,plan.distance)};
+ selected=s.at;orbit=0;look=0;viewpoint=false;aside=0;
+ say(mode==='cart'?'Xe bò đã sẵn sàng. Giữ W hoặc ▲ để đi, trả tiền khi tới nơi.':'Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
 }
 function finishTravel(){
  const t=travel;travel=null;aside=0;motion=false;needRelease=true;
+ setAuto(false);
  if(!E.arrive(s,t.to,t.plan,0,t.damage,t.roadMinutes)){say('Không thể hoàn thành chặng.');render();return;}
  selected=s.at;idleRoute=previewRoute();E.meet(s);save();
  const person=companions[E.encounter(s)?.person];
@@ -254,7 +364,7 @@ function trailGuide(){
  const button=(text,fn)=>{const b=dom('button',text);b.type='button';b.addEventListener('click',fn);actions.append(b);};
  const t=travel, next=s.at===places.length-1?s.at-1:s.at+1;
  actions.replaceChildren();$('drive-controls').hidden=!in3d||Boolean(cast);
- $('jump').hidden=s.mode!=='walk';
+ $('jump').hidden=activeMode()!=='walk';
  if(cast){
   label.textContent='ĐANG CÂU CÁ';title.textContent='Canh phao chìm';detail.textContent='Khi nhật ký báo phao chìm, bấm Giật cần.';
   button('Giật cần',catchNow);return;
@@ -267,28 +377,33 @@ function trailGuide(){
  label.textContent=t?'TRÊN ĐƯỜNG':s.at===places.length-1?'CUỐI TUYẾN':'CHẶNG TIẾP THEO';
  const destination=t?.to??next,kilometers=t?.plan.km??TripData.legKilometers[Math.min(s.at,destination)];
  title.textContent=places[destination].name+' · khoảng '+kilometers+' km';
- detail.textContent=s.at===places.length-1&&!t?'Giữ S hoặc ▼ để đi về phía Chợ Đồng Văn.':
-  s.mode==='walk'?'W/S tiến hoặc lùi · A/D né · Space hoặc Nhảy để vượt chướng ngại.':'W/S tiến hoặc lùi · A/D né sang hai bên.';
+ const footOnly=t?.plan.footOnly??roads[Math.min(s.at,destination)].footOnly;
+ detail.textContent=s.at===places.length-1&&!t?'Giữ S hoặc ▼ để trở về Sống lưng Khủng long.':
+  footOnly?'Đường mòn sát vách đá · Chỉ đi bộ. Giữ W/S để di chuyển.':
+  activeMode()==='walk'?'W/S tiến hoặc lùi · A/D né · Space hoặc Nhảy để vượt chướng ngại.':'W/S tiến hoặc lùi · A/D né sang hai bên.';
 }
 function render(){
  const p=places[selected],local=selected===s.at;
- $('mode').textContent=modes[s.mode].name;$('money').textContent=s.money+'k ₫';updateStats();
+ $('mode').textContent=modes[activeMode()].name;$('money').textContent=s.money+'k ₫';updateStats();
  $('place-tag').textContent=p.kind+(local?' · ĐANG Ở':'');$('place').textContent=p.name;$('summary').textContent=p.description;photo(p);
- $('bag').textContent=`🍚 ${s.bag.meals} · 💧 ${s.bag.bottles} · 🐟 ${s.bag.fish} · ✚ ${s.bag.meds} · 🦴 ${s.bag.treats}`;
+ const gathered=Object.entries(forage).filter(([k])=>s.bag[k]).map(([k,item])=>item.icon+' '+s.bag[k]);
+ $('bag').textContent=[`🍚 ${s.bag.meals} · 💧 ${s.bag.bottles} · ⚡ ${s.bag.energyDrinks} · 🐟 ${s.bag.fish} · ✚ ${s.bag.meds} · 🦴 ${s.bag.treats}`,...gathered].join(' · ');
  const pets=Object.keys(s.pets).filter(k=>s.pets[k]===2),petIcons=pets.map(k=>k==='dog'?'🐕':'🐈').join(' ');
  const party=[companions[s.companion]?.name,...pets.map(k=>k==='dog'?'🐕 Chó':'🐈 Mèo')].filter(Boolean);
  $('mission').textContent=s.photos.length===3?'Hoàn thành bộ ảnh Hà Giang!':'Bộ ảnh Hà Giang: '+s.photos.length+'/3';
  $('party').hidden=!party.length;$('party').textContent=party.length?'Đi cùng '+party.join(' · '):'';
- $('message').textContent=showText;marker.textContent=petIcons||modes[s.mode].icon;marker.title=modes[s.mode].name;
+ $('message').textContent=showText;marker.textContent=petIcons||modes[activeMode()].icon;marker.title=modes[activeMode()].name;
  pinState();$('actions').replaceChildren();trailGuide();
- if(travel){route(travel.plan,travel.d);return;}
+ if(travel){route(travel.plan,travel.d);supplyActions();return;}
  position(...coords(places[s.at]));
  if(cast){route(null);action('Giật cần',catchNow);return;}
+ if(selected>=7)action('Đối chiếu trên bản đồ thật',()=>setView(false,true,selected));
  if(!local){
   route(null);
   action('Xem điểm đang đứng',()=>select(s.at));
  }else{
   route(null);
+  if(selected>=7&&scene)action('Ngắm sông từ vách đá',lookAtRiver);
   if(p.photo)action(s.photos.includes(p.id)?'✓ Đã check-in':'Check-in · Lưu ảnh',()=>service('photo'),s.photos.includes(p.id));
   if(p.services?.includes('fish'))action('Thả câu',()=>{cast={start:performance.now(),phase:0};say('Phao đang nổi. Canh lúc phao chìm rồi giật cần.');render();},!E.canFish(s));
   if(p.services?.includes('job'))action('Phụ quán · +38k',()=>service('job'),!E.canWork(s));
@@ -311,31 +426,61 @@ function render(){
    action(trust===0?'Ngồi yên làm quen với '+animal+' hoang':'Đặt đồ ăn rồi lùi lại · Nhận nuôi '+animal,()=>service(trust===0?'waitPet':'befriend'),trust===1&&!s.bag.treats);
   }
   if(p.id==='dong')for(const kind of pets)action('Bán '+(kind==='dog'?'chó':'mèo')+' · +'+petPrices[kind]+'k',()=>{say(E.sellPet(s,kind));save();render();});
-  if(p.services?.includes('shop')){
+  if(p.host){
+   action(openHost===p.id?'Chào ra về':'Gõ cửa nhà '+p.host.name,()=>{
+    const leaving=openHost===p.id;openHost=leaving?null:p.id;
+    say(leaving?'Chào chủ nhà rồi tiếp tục lên đường.':p.host.greeting);render();
+   });
+  }
+  if(p.services?.includes('shop')&&(!p.host||openHost===p.id)){
    action('Cơm · 18k',()=>service('buyMeal'),s.money<18);action('Nước · 8k',()=>service('buyWater'),s.money<8);
    action('Đồ ăn cho thú · 12k',()=>service('buyTreat'),s.money<12);action('Túi sơ cứu · 22k',()=>service('buyMed'),s.money<22);
+   action('Nước tăng lực · '+energyDrinkPrice+'k',()=>service('buyEnergyDrink'),s.money<energyDrinkPrice);
+   const value=Object.entries(forage).reduce((sum,[k,v])=>sum+s.bag[k]*v.price,0);
+   if(value)action('Bán đồ nhặt được · +'+value+'k',()=>service('sellForage'));
   }
-  if(p.services?.includes('garage'))Object.entries(modes).filter(([id])=>!s.owned.includes(id)).forEach(([id,v])=>action('Mua '+v.name.toLowerCase()+' · '+v.price+'k',()=>{if(E.buyVehicle(s,id)){say('Đã mua '+v.name+'.');save();render();}},s.money<v.price));
+  if(p.services?.includes('garage')){
+   Object.entries(modes).filter(([id,v])=>Number.isFinite(v.price)&&!s.owned.includes(id)).forEach(([id,v])=>action('Mua '+v.name.toLowerCase()+' · '+v.price+'k',()=>{if(E.buyVehicle(s,id)){say('Đã mua '+v.name+'.');save();render();}},s.money<v.price));
+   if(scene&&places[s.at+1]&&!roads[s.at].footOnly){
+    action('Thuê xe bò chặng tới · '+cartFare+'k',()=>{
+     if(!in3d)setView(true);travelStart(1,'cart');
+    },!E.canTravel(s,E.trip(s.at,s.at+1,'cart')));
+   }
+  }
   if(p.services?.includes('rest'))action('Ngủ tại trạm · 15k',()=>service('camp'),s.money<15);
+  if(E.canCamp(s)){
+   if(s.campAt===s.at){
+    action('Chờ tối ngắm sao',()=>{service('waitStars');if(!in3d)setView(true);look=.58;});
+    action('Ngủ trong lều đến sáng',()=>{service('sleepTent');look=0;});
+    action('Thu lều',()=>service('packTent'));
+   }else action('Tự dựng lều',()=>service('pitchTent'));
+  }
   if(p.services?.includes('help')&&E.needsHelp(s))action('Nhận suất hỗ trợ',()=>service('help'));
  }
- if(s.bag.meals)action('Ăn cơm',()=>service('meal'),s.food===100);
- if(s.bag.bottles)action('Uống nước',()=>service('drink'),s.water===100);
- if(s.bag.meds)action('Sơ cứu · +45 máu',()=>service('med'),s.health===100);
+ supplyActions();
  action('Ngồi nghỉ · +32 sức',()=>service('nap'),s.energy>90);
  for(const id of s.owned)if(id!==s.mode)action('Đổi sang '+modes[id].name.toLowerCase(),()=>{E.setVehicle(s,id);save();render();});
  if(E.needsRescue(s))action('Gọi hỗ trợ đường xa',()=>{if(E.rescue(s)){say('Được tiếp tế đủ đi bộ tới trạm gần nhất. Mất hai giờ.');save();render();}});
 }
 function loop(ms){
  const dt=Math.min(.075,Math.max(0,(ms-(last||ms))/1000));last=ms;
- const drive=in3d&&!cast?Number(pressing('forward'))-Number(pressing('back')):0;
+ if(auto&&belowAutoThreshold()){setAuto(false);say('Đã dừng tự đi: có chỉ số dưới 30%. Dùng đồ tiếp tế trong túi.');}
+ const manual=Number(pressing('forward'))-Number(pressing('back'));
+ const drive=in3d&&!cast?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
  motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);
- const steering=travel&&in3d?Number(pressing('right'))-Number(pressing('left')):0;
+ const nextObstacle=travel?.plan.hazards[travel.nextHazard],mode=activeMode();
+ const obstacleDistance=nextObstacle?nextObstacle.at-travel.d:Infinity;
+ let steering=travel&&in3d?Number(pressing('right'))-Number(pressing('left')):0;
+ if(auto&&travel&&!steering&&mode!=='walk'){
+  const target=obstacleDistance>0&&obstacleDistance<40?4.2:0;
+  if(Math.abs(aside-target)>.18)steering=Math.sign(target-aside);
+ }
  steerPose+=(steering-steerPose)*(1-Math.exp(-dt*13));
  const input=travel?drive*travel.direction:0;
- if(jumpRequested&&in3d&&!cast&&s.mode==='walk'&&!jump&&(!activity||ms>=activity.until)&&(!travel||ms>=travel.holdUntil)){
+ if(auto&&mode==='walk'&&obstacleDistance>1.6&&obstacleDistance<=2.2)jumpRequested=true;
+ if(jumpRequested&&in3d&&!cast&&mode==='walk'&&!jump&&(!activity||ms>=activity.until)&&(!travel||ms>=travel.holdUntil)){
   jump={phase:0,direction:input};
  }
  jumpRequested=false;
@@ -347,13 +492,14 @@ function loop(ms){
  if(travel&&in3d){
   const t=travel,prior=t.d,clock=gameClock(),weather=E.weather(clock);
   const oldOffset=aside;
-  const lateral=s.mode==='walk'?1.95:3.5+3.2*Math.abs(steerPose);
-  aside=Math.max(-5.6,Math.min(5.6,aside+steering*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
+  const lateral=mode==='walk'?1.95:3.5+3.2*Math.abs(steerPose);
+  const limit=t.plan.footOnly?1:5.6;
+  aside=Math.max(-limit,Math.min(limit,aside+steering*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
   motion=aside!==oldOffset;
   if(throttle&&ms>=t.holdUntil){
    t.throttle=throttle;
    const qty=E.pace(t.plan,t.d,s,t.damage,throttle,clock);speedPose=qty.speed/t.plan.speed;
-   throttleRamp=Math.min(1,throttleRamp+dt/(s.mode==='walk'?.29:.49));
+   throttleRamp=Math.min(1,throttleRamp+dt/(mode==='walk'?.29:.49));
    const strideSpeed=qty.speed*worldUnitsPerKmh;
    const groundedSpeed=strideSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle<0?.58:1)*(Math.abs(aside)>3.7?.76:1);
    const speed=jump?Math.max(groundedSpeed,5.15*(1-weather.mud*.15)):groundedSpeed;
@@ -362,14 +508,14 @@ function loop(ms){
    actualSpeed=dt?(t.d-prior)/dt:0;
    speedKmh=Math.abs(actualSpeed)/worldUnitsPerKmh;
    const next=t.plan.hazards[t.nextHazard];
-   if(next&&!t.warned&&next.at-t.d<(s.mode==='walk'?10:36)){
-    t.warned=true;say(next.name+' phía trước. '+(s.mode==='walk'?'Nhảy khi hiện nhắc Space, hoặc né bằng A/D.':'Né hẳn sang trái hoặc phải bằng A/D.'));
+   if(next&&!t.warned&&next.at-t.d<(mode==='walk'?10:36)){
+    t.warned=true;say(next.name+' phía trước. '+(mode==='walk'?'Nhảy khi hiện nhắc Space, hoặc né bằng A/D.':'Né hẳn sang trái hoặc phải bằng A/D.'));
    }
    if(next&&prior<next.at&&t.d>=next.at){
     t.nextHazard++;
     const crossing=(next.at-prior)/(t.d-prior);
     const height=oldJump===null?0:E.jumpHeight(oldJump+crossing*dt/jumpDuration);
-    if(Math.abs(aside)>=(s.mode==='car'?3.35:2.4))say('Đã né được chướng ngại.');
+    if(Math.abs(aside)>=(mode==='car'||mode==='cart'?3.35:2.4))say('Đã né được chướng ngại.');
     else if(height>=next.height)say('Đã nhảy qua chướng ngại.');
     else{
      const damage=Math.min(t.plan.impact,Math.max(0,s.health-t.damage-1));
@@ -378,9 +524,14 @@ function loop(ms){
     }
    }
    if(speedKmh>0)t.roadMinutes+=60*t.plan.km*Math.abs(t.d-prior)/(t.plan.distance*Math.min(speedKmh,qty.speed));
+   const pickup=t.pickup;
+   if(pickup&&((prior<pickup.at&&t.d>=pickup.at)||(prior>pickup.at&&t.d<=pickup.at))){
+    t.pickup=null;say(E.collectForage(s,pickup));render();
+   }
    if(t.d>=t.plan.distance)finishTravel();
    else if(t.d===0&&throttle<0){
-    s.health=Math.max(1,s.health-t.damage);s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;
+    for(const stat of ['food','water','energy'])s[stat]=Math.min(100,s[stat]);
+    s.health=Math.max(1,Math.min(100,s.health-t.damage));s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;setAuto(false);
     save();say('Đã lùi về '+places[s.at].name+'.');render();
    }
   }
@@ -395,7 +546,7 @@ function loop(ms){
  drawScene(ms);
  requestAnimationFrame(loop);
 }
-$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();selected=0;travel=null;cast=null;activity=null;idleRoute=previewRoute();orbit=0;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
+$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();selected=0;travel=null;cast=null;activity=null;openHost=null;idleRoute=previewRoute();orbit=0;look=0;viewpoint=false;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
 if(s.at!==0&&!E.encounter(s)){E.meet(s);save();}
 buildTerrain();overview();initialized=true;setView(Boolean(scene));render();requestAnimationFrame(loop);
 })();

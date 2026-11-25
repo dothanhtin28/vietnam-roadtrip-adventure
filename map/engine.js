@@ -1,7 +1,9 @@
 'use strict';
 globalThis.TripEngine = (() => {
-const {places,roads,modes,geoAnchors,legKilometers,companions,petPrices}=TripData;
-const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0},photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
+const {places,roads,modes,geoAnchors,legKilometers,companions,petPrices,cartFare,energyDrinkPrice,forage}=TripData;
+const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
+const campingStops=new Set(['start','river','yen','dong','nho-que']);
+const canCamp=s=>campingStops.has(places[s.at].id);
 const clamp=(v)=>Math.max(0,Math.min(v,100));
 const time=mins=>String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 const day=s=>Math.floor(s.clock/1440)+1;
@@ -38,12 +40,16 @@ function pointAt(path,d){
 }
 // Elevations are game-world units, not surveyed terrain. Compute one profile so
 // the road mesh, speed simulation and grade indicator agree, in both directions.
-const elevations=[12,17,38,66,82,119,138,114];
+const elevations=[12,17,38,66,82,119,138,140,148,127];
 const bound=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 const jumpHeight=phase=>phase===null||phase<=0||phase>=1?0:4*1.27*phase*(1-phase);
 const obstacleHeight={rock:.82,mud:.22,branch:.58};
 function geoPosition(from,to=from,fraction=0){
  const progress=bound(fraction,0,1);
+ if(from!==to&&Math.abs(from-to)===1&&Math.min(from,to)>=6){
+  const route=profile(from,to),p=sample(route,route.at(-1).d*progress);
+  return TripData.toGeo(p.x,p.z);
+ }
  return geoAnchors[from].map((coordinate,i)=>coordinate+(geoAnchors[to][i]-coordinate)*progress);
 }
 const routeProfile=[];
@@ -95,17 +101,18 @@ function grade(profile,d){
 }
 function condition(s,plan,d,damage=0){
  const f=plan.distance?bound(d/plan.distance,0,1):0;
- return {food:Math.max(0,s.food-plan.food*f),water:Math.max(0,s.water-plan.water*f),energy:Math.max(0,s.energy-plan.energy*f),health:Math.max(0,s.health-damage)};
+ return {food:clamp(s.food-plan.food*f),water:clamp(s.water-plan.water*f),energy:clamp(s.energy-plan.energy*f),health:clamp(s.health-damage)};
 }
 function pace(plan,d,s,damage=0,direction=1,clock=s.clock){
  const slope=grade(plan.profile,d)*direction,v=condition(s,plan,d,damage);
  const loss=(n,threshold,weight)=>bound((threshold-n)/threshold,0,1)*weight;
  const needs=1-loss(v.health,95,.32)-loss(v.food,72,.23)-loss(v.water,80,.28)-loss(v.energy,85,.16);
- const motor=(plan.mode==='car'||plan.mode==='moto');
+ const motor=(plan.mode==='car'||plan.mode==='moto'),cart=plan.mode==='cart';
  const gradeFactor=bound(slope>0?1/(1+slope*(motor?1.8:plan.mode==='bike'?5.2:3.2)):1-slope*(motor?.55:1.25),.40,motor?1.08:1.12);
  const conditions=weather(clock),weatherFactor=conditions.speed+(motor?(1-conditions.speed)*.38:0);
- const traction=1-conditions.mud*(plan.mode==='bike'?.15:motor?.07:.05);
- return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*Math.max(.26,needs)*weatherFactor*traction};
+ const traction=1-conditions.mud*(plan.mode==='bike'?.15:motor?.07:cart?.11:.05);
+ const boost=plan.mode==='walk'&&clock<s.boostUntil?1.24:1;
+ return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*(cart?1:Math.max(.26,needs))*weatherFactor*traction*boost};
 }
 function eta(plan,s){
  if(!plan.distance)return 0;
@@ -115,27 +122,29 @@ function eta(plan,s){
 }
 function trip(from,to,mode){
  const course=profile(from,to), points=course.map(p=>[p.x,p.z]), distance=course.at(-1).d;
- let weighted=0, after=0,km=0;const hazards=[];
+ let weighted=0, after=0,km=0,footOnly=false;const hazards=[];
  const dir=Math.sign(to-from);
  for(let i=from;i!==to;i+=dir){
   const leg=roads[Math.min(i,i+dir)], len=profile(i,i+dir).at(-1).d;
+  footOnly||=Boolean(leg.footOnly);
   if(leg.hazard)hazards.push({name:leg.hazard,kind:leg.obstacle,height:obstacleHeight[leg.obstacle],at:after+len*.55});
   after+=len;weighted+=length(path(i,i+dir))*leg.slope;km+=legKilometers[Math.min(i,i+dir)];
  }
- const v=modes[mode]||modes.walk, motor=v.fuel>0;
- return {points,profile:course,mode,distance,km,food:Math.ceil(weighted/(motor?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(km*60/v.kmh),speed:v.kmh,hazards,impact:v.impact};
+ const v=modes[mode]||modes.walk, motor=v.fuel>0,cart=mode==='cart';
+ const hireAvailable=cart&&Math.abs(from-to)===1&&places[from].services?.includes('garage')&&!footOnly;
+ return {points,profile:course,mode,footOnly,hireAvailable,distance,km,food:Math.ceil(weighted/(motor||cart?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor||cart?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:cart?cartFare:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(km*60/v.kmh),speed:v.kmh,hazards,impact:v.impact};
 }
 function apply(s,{food=0,water=0,energy=0,health=0,minutes=0}){
  s.food=clamp(s.food+food);s.water=clamp(s.water+water);s.energy=clamp(s.energy+energy);s.health=clamp(s.health+health);s.clock+=minutes;
 }
-const canTravel=(s,t)=>s.food>=t.food&&s.water>=t.water&&s.energy>=t.energy&&s.money>=t.fuel&&s.health>0;
+const canTravel=(s,t)=>(!t.footOnly||t.mode==='walk')&&(t.mode!=='cart'||t.hireAvailable)&&s.food>=t.food&&s.water>=t.water&&s.energy>=t.energy&&s.money>=t.fuel&&s.health>0;
 function arrive(s,to,t,extra=0,damage=0,roadMinutes=t.minutes){
  if(!canTravel(s,t)||damage>=s.health)return false;
  apply(s,{food:-t.food,water:-t.water,energy:-t.energy,health:-damage,minutes:Math.ceil(roadMinutes)+extra});s.money-=t.fuel;s.at=to;return true;
 }
 function buyVehicle(s,id){
  const v=modes[id];
- if(!v||!places[s.at].services?.includes('garage')||s.owned.includes(id)||s.money<v.price)return false;
+ if(!Number.isFinite(v?.price)||!places[s.at].services?.includes('garage')||s.owned.includes(id)||s.money<v.price)return false;
  s.money-=v.price;s.owned.push(id);s.mode=id;return true;
 }
 function setVehicle(s,id){if(!s.owned.includes(id)||!modes[id])return false;s.mode=id;return true;}
@@ -183,18 +192,60 @@ function sellPet(s,kind){
  if(encounter(s)?.stray===kind)encounter(s).stray=null;
  return 'Đã bán '+(kind==='dog'?'chó':'mèo')+' cho người nhận nuôi tại chợ. +'+petPrices[kind]+'k.';
 }
-function service(s,a){
- const place=places[s.at], at=k=>place.services?.includes(k), buy=(item,price)=>{if(s.money<price)return 'Không đủ tiền.';s.money-=price;s.bag[item]++;return 'Đã cất vào túi.';};
+const forageKinds=Object.keys(forage);
+function forageSpot(s,from,to,distance){
+ const key=Math.min(from,to),today=day(s),seed=(today*307+key*173+47)%997;
+ if(s.foraged[key]===today||seed%100>=68)return null;
+ const fraction=.22+(seed%37)*.015;
+ return {key,day:today,kind:forageKinds[Math.floor(seed/7)%forageKinds.length],at:distance*(from<to?fraction:1-fraction)};
+}
+function collectForage(s,spot){
+ s.foraged[spot.key]=spot.day;
+ s.bag[spot.kind]=(s.bag[spot.kind]??0)+1;
+ return 'Nhặt được '+forage[spot.kind].name.toLowerCase()+' ven đường.';
+}
+function service(s,a,clock=s.clock){
+ const place=places[s.at], at=k=>place.services?.includes(k), buy=(item,price)=>{if(s.money<price)return 'Không đủ tiền.';s.money-=price;s.bag[item]=(s.bag[item]??0)+1;return 'Đã cất vào túi.';};
+ if(Object.hasOwn(forage,a)){
+  if(!s.bag[a])return 'Trong túi không còn món này.';
+  s.bag[a]--;apply(s,{food:forage[a].food,water:forage[a].water});
+  return 'Đã ăn '+forage[a].name.toLowerCase()+'.';
+ }
  switch(a){
  case 'meal': if(s.bag.meals){s.bag.meals--;apply(s,{food:42});return 'Ăn cơm: +42 no bụng.';}return 'Trong túi không có cơm.';
  case 'drink': if(s.bag.bottles){s.bag.bottles--;apply(s,{water:48});return 'Uống nước: +48 đủ nước.';}return 'Trong túi không có nước.';
  case 'buyMeal': return at('shop')?buy('meals',18):'Cần đến quán.';
  case 'buyWater': return at('shop')?buy('bottles',8):'Cần đến quán.';
+ case 'buyEnergyDrink': return at('shop')?buy('energyDrinks',energyDrinkPrice):'Cần đến quán.';
+ case 'energyDrink':
+  if(clock<s.boostUntil)return 'Nước tăng lực vẫn còn tác dụng.';
+  if(!s.bag.energyDrinks)return 'Trong túi không có nước tăng lực.';
+  s.bag.energyDrinks--;s.boostUntil=clock+140;apply(s,{energy:18});
+  return 'Uống nước tăng lực: +18 sức, đi bộ nhanh hơn 24% trong 2 giờ 20 phút của game.';
  case 'buyMed': return at('shop')?buy('meds',22):'Cần đến quán.';
  case 'med': if(s.bag.meds&&s.health<100){s.bag.meds--;apply(s,{health:45});return 'Đã sơ cứu: +45 máu.';}return 'Không cần sơ cứu hoặc chưa có túi sơ cứu.';
  case 'buyTreat': return at('shop')?buy('treats',12):'Cần đến quán.';
  case 'nap': apply(s,{energy:32,food:-3,water:-4,minutes:40});return 'Ngồi nghỉ: +32 thể lực.';
  case 'camp': if(at('rest')&&s.money>=15){s.money-=15;apply(s,{energy:100,food:-4,water:-5,minutes:480});return 'Ngủ một giấc, hồi đầy thể lực.';}return 'Cần 15k và một trạm nghỉ.';
+ case 'pitchTent':
+  if(!canCamp(s)||s.campAt===s.at)return 'Chọn một điểm nghỉ có chỗ dựng lều.';
+  s.campAt=s.at;apply(s,{minutes:15});return 'Đã dựng lều. Có thể ngắm trời hoặc ngủ đến sáng.';
+ case 'sleepTent': {
+  if(s.campAt!==s.at)return 'Dựng lều trước khi ngủ.';
+  const today=Math.floor(s.clock/1440)*1440;
+  const wake=today+360+(s.clock>=today+360?1440:0);
+  apply(s,{energy:100,food:-7,water:-9,minutes:wake-s.clock});
+  return 'Thức dậy lúc 06:00. Thể lực đã hồi đầy.';
+ }
+ case 'waitStars': {
+  if(s.campAt!==s.at)return 'Dựng lều trước khi chờ tối.';
+  const minute=s.clock%1440;
+  if(minute>=1170||minute<300)return 'Trời đã tối. Hãy ngước nhìn bầu trời.';
+  apply(s,{food:-3,water:-4,minutes:1260-minute});return 'Đã 21:00. Hãy ngước nhìn bầu trời.';
+ }
+ case 'packTent':
+  if(s.campAt!==s.at)return 'Chưa có lều ở đây.';
+  s.campAt=null;apply(s,{minutes:8});return 'Đã thu lều, có thể tiếp tục hành trình.';
  case 'help': {
   if(!at('help')||!needsHelp(s))return 'Chưa cần dùng phần tiếp tế khẩn cấp.';
   s.food=Math.max(s.food,28);s.water=Math.max(s.water,30);s.energy=Math.max(s.energy,35);return 'Nhận suất hỗ trợ để tới điểm tiếp tế tiếp theo.';
@@ -205,6 +256,13 @@ function service(s,a){
   s.money+=38;apply(s,{food:-10,water:-12,energy:-18,minutes:90});s.jobs[place.id]=day(s);return 'Phụ quán xong: +38k.';
  }
  case 'sell': if(at('sell')&&s.bag.fish){const n=s.bag.fish;s.bag.fish=0;s.money+=n*16;return 'Bán '+n+' cá: +'+n*16+'k.';}return 'Cần có cá và tới Chợ Đồng Văn.';
+ case 'sellForage': {
+  if(!at('shop'))return 'Ghé quán hoặc nhà dân để bán.';
+  const total=forageKinds.reduce((sum,k)=>sum+(s.bag[k]??0)*forage[k].price,0);
+  if(!total)return 'Trong túi chưa có món nào nhặt được.';
+  for(const k of forageKinds)s.bag[k]=0;
+  s.money+=total;return 'Đã bán đồ nhặt ven đường: +'+total+'k.';
+ }
  case 'photo': if(place.photo&&!s.photos.includes(place.id)){s.photos.push(place.id);return 'Đã lưu ảnh '+place.name+' · '+s.photos.length+'/3.';}return 'Điểm này đã lưu hoặc không có ảnh.';
  case 'waitPet': {
   const pet=localPet(s);
@@ -238,5 +296,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight};
+return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight,canCamp,forageSpot,collectForage};
 })();
