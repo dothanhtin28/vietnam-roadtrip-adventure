@@ -43,3 +43,20 @@ footer{font-size:.78rem;color:#4e6355}
 .pace{position:absolute;left:8px;top:49px;display:flex;gap:5px;align-items:center;max-width:calc(100% - 115px);flex-wrap:wrap;font-size:.73rem;pointer-events:none}
 .pace>*{background:#faf5e3ee;border-radius:5px;padding:3px 6px}
 @media(max-width:770px){#scene-panel{height:clamp(310px,49vh,500px)}.pace{font-size:.63rem}.scene-controls button{min-height:32px}}
+
+/* Keep the next action visible in both views, outside the canvas and map. */
+.trail-guide{padding:10px 12px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:9px;background:#fff9ea;border-top:1px solid #b0bc9b}
+.trail-guide .eyebrow{font-size:.59rem;color:#516e58}
+#trail-title{font:700 1.06rem Georgia,serif;color:#173c30}
+#trail-detail{font-size:.74rem;margin:3px 0 0;color:#4d6354}
+#trail-actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+#trail-actions button{min-height:39px} #trail-actions button:first-child{color:#fff9df;background:#174c3d;border-color:#174c3d;padding-inline:13px}
+#trail-actions button:disabled{opacity:.56}
+#trail-actions:empty{display:none}
+#place,.trail-guide strong{font-variant-ligatures:none}
+.pace>span:empty{display:none}
+@media(max-width:650px){.trail-guide{grid-template-columns:1fr;padding:8px 9px}#trail-actions button{flex:1 1 auto}#scene-panel{height:clamp(275px,43vh,460px)}}
+
+#drive-controls{display:flex;gap:4px}#drive-controls button{min-width:39px;padding:4px 8px;touch-action:none;user-select:none}#drive-controls button:not([aria-pressed=true]){background:#eef1de;color:#184738;border-color:#93a484}
+#drive-controls button[aria-pressed=true]{background:#16483c;color:#fff5d7}
+#trail-extra:empty{display:none}

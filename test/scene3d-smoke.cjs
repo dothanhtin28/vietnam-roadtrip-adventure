@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'), fs=require('node:fs'), path=require('node:path'), vm=require('node:vm');
 const root=path.join(__dirname,'..','map');
 const c=vm.createContext({});
-for(const f of ['data.js','engine.js','scene3d.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c);
+for(const f of ['data.js','engine.js','hiker3d.js','scene3d.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c);
 const E=c.TripEngine, S=c.TripScene3D, fresh=E.fresh;
 const up=E.trip(2,3,'walk'),down=E.trip(3,2,'walk'),mid=up.distance/2;
 assert(Math.abs(up.distance-down.distance)<1e-6);
@@ -31,4 +31,14 @@ for(const [idx,mode] of ['walk','bike','moto','car'].entries()){
  assert(keyframes.some(k=>typeof k==='string'&&k.startsWith('rgb(')));
 }
 assert(Number.isFinite(S.land(580,420)));
+const Rig=c.WindHiker, rig=Rig.create();
+const tank=rig.pose({seconds:1}), rest=Array.from({length:30},(_,i)=>rig.pose({action:'rest',actionTime:i/30,seconds:2+i/30})).at(-1);
+assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
+for(const action of ['fish','reel','meal','drink','rest','photo']){
+ rig.reset();
+ const p=Array.from({length:28},(_,i)=>rig.pose({action,actionTime:i/30,seconds:2+i/30})).at(-1);
+ let faces=0;Rig.draw((vertices)=>{check(...vertices.flat());faces++},v=>v,p,'walk');
+ assert(faces>650);assert.equal(p.action,action);assert(p.activity>.85);
+}
+
 console.log('OK: 3D geometry and all vehicle modes; uphill/downhill, hunger, thirst, energy, health, damage and ETA.');

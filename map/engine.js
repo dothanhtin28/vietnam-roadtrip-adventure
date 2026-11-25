@@ -60,8 +60,8 @@ function condition(s,plan,d,damage=0){
  const f=plan.distance?bound(d/plan.distance,0,1):0;
  return {food:Math.max(0,s.food-plan.food*f),water:Math.max(0,s.water-plan.water*f),energy:Math.max(0,s.energy-plan.energy*f),health:Math.max(0,s.health-damage)};
 }
-function pace(plan,d,s,damage=0){
- const slope=grade(plan.profile,d),v=condition(s,plan,d,damage);
+function pace(plan,d,s,damage=0,direction=1){
+ const slope=grade(plan.profile,d)*direction,v=condition(s,plan,d,damage);
  const loss=(n,threshold,weight)=>bound((threshold-n)/threshold,0,1)*weight;
  const needs=1-loss(v.health,95,.32)-loss(v.food,72,.23)-loss(v.water,80,.28)-loss(v.energy,85,.16);
  const motor=(plan.mode==='car'||plan.mode==='moto');
