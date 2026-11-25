@@ -1,10 +1,25 @@
 'use strict';
 globalThis.TripEngine = (() => {
-const {places,roads,modes}=TripData;
-const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0},photos:[],pets:{dog:0,cat:0},jobs:{},casts:0});
+const {places,roads,modes,geoAnchors,companions,petPrices}=TripData;
+const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0},photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
 const clamp=(v)=>Math.max(0,Math.min(v,100));
 const time=mins=>String(Math.floor(mins/60)%24).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');
 const day=s=>Math.floor(s.clock/1440)+1;
+const weatherStates={
+ clear:{kind:'clear',label:'Trời quang',mud:0,speed:1},
+ heat:{kind:'heat',label:'Nắng gắt',mud:0,speed:.85},
+ rain:{kind:'rain',label:'Mưa rào',mud:1,speed:.73},
+ wind:{kind:'wind',label:'Gió mạnh',mud:.52,speed:.88},
+ night:{kind:'night',label:'Trời tối',mud:0,speed:.93}
+};
+function weather(clock){
+ const minute=clock%1440,shift=(Math.floor(clock/1440)%3)*35;
+ if(minute<330||minute>=1110)return weatherStates.night;
+ if(minute>=910+shift)return weatherStates.wind;
+ if(minute>=740+shift)return weatherStates.rain;
+ if(minute>=570+shift)return weatherStates.heat;
+ return weatherStates.clear;
+}
 function path(from,to){
  const dir=Math.sign(to-from), out=[[places[from].x,places[from].y]];
  for(let i=from; i!==to; i+=dir){
@@ -25,6 +40,10 @@ function pointAt(path,d){
 // the road mesh, speed simulation and grade indicator agree, in both directions.
 const elevations=[12,17,38,66,82,119,138,114];
 const bound=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+function geoPosition(from,to=from,fraction=0){
+ const progress=bound(fraction,0,1);
+ return geoAnchors[from].map((coordinate,i)=>coordinate+(geoAnchors[to][i]-coordinate)*progress);
+}
 const routeProfile=[];
 function roundBends(points){
  const out=[points[0]];
@@ -76,13 +95,15 @@ function condition(s,plan,d,damage=0){
  const f=plan.distance?bound(d/plan.distance,0,1):0;
  return {food:Math.max(0,s.food-plan.food*f),water:Math.max(0,s.water-plan.water*f),energy:Math.max(0,s.energy-plan.energy*f),health:Math.max(0,s.health-damage)};
 }
-function pace(plan,d,s,damage=0,direction=1){
+function pace(plan,d,s,damage=0,direction=1,clock=s.clock){
  const slope=grade(plan.profile,d)*direction,v=condition(s,plan,d,damage);
  const loss=(n,threshold,weight)=>bound((threshold-n)/threshold,0,1)*weight;
  const needs=1-loss(v.health,95,.32)-loss(v.food,72,.23)-loss(v.water,80,.28)-loss(v.energy,85,.16);
  const motor=(plan.mode==='car'||plan.mode==='moto');
  const gradeFactor=bound(slope>0?1/(1+slope*(motor?1.65:plan.mode==='bike'?5.2:3.6)):1-slope*(motor?.7:1.55),.40,1.24);
- return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*Math.max(.26,needs)};
+ const conditions=weather(clock),weatherFactor=conditions.speed+(motor?(1-conditions.speed)*.38:0);
+ const traction=1-conditions.mud*(plan.mode==='bike'?.15:motor?.07:.05);
+ return {slope,gradeFactor,needs:Math.max(.26,needs),speed:plan.speed*gradeFactor*Math.max(.26,needs)*weatherFactor*traction};
 }
 function eta(plan,s){
  if(!plan.distance)return 0;
@@ -123,6 +144,37 @@ function rescue(s){
  const goal=depots.filter(i=>i!==s.at).sort((a,b)=>length(path(s.at,a))-length(path(s.at,b)))[0], leg=trip(s.at,goal,'walk');
  s.food=Math.max(s.food,leg.food+8);s.water=Math.max(s.water,leg.water+8);s.energy=Math.max(s.energy,leg.energy+8);s.health=Math.max(s.health,15);s.clock+=120;return true;
 }
+function meet(s,random=Math.random){
+ const stop=places[s.at],today=day(s);
+ if(s.meetings[stop.id]?.day===today)return;
+ const candidates=Object.keys(companions);
+ const person=s.companion||s.at===0||random()>=.58?null:candidates[Math.floor(random()*candidates.length)];
+ const strays=Object.keys(petPrices).filter(kind=>s.pets[kind]!==2);
+ const stray=stop.pet??(strays.length&&random()<.24?strays[Math.floor(random()*strays.length)]:null);
+ s.meetings[stop.id]={day:today,person,stray,invited:false};
+}
+const encounter=s=>s.meetings[places[s.at].id]?.day===day(s)?s.meetings[places[s.at].id]:null;
+const localPet=s=>places[s.at].pet??encounter(s)?.stray;
+function petProgress(s){
+ const pet=localPet(s);
+ if(!pet||s.pets[pet]===2)return 2;
+ return places[s.at].pet?s.pets[pet]:Number(Boolean(encounter(s)?.petTrust));
+}
+function invite(s,random=Math.random){
+ const meeting=encounter(s),person=companions[meeting?.person];
+ if(s.companion||!person||meeting.invited)return '';
+ meeting.invited=true;
+ if(random()>=person.chance)return person.name+' muốn đi riêng chặng này.';
+ s.companion=meeting.person;
+ return person.name+' đã đồng ý đồng hành.';
+}
+function sellPet(s,kind){
+ if(!Object.hasOwn(petPrices,kind)||places[s.at].id!=='dong'||s.pets[kind]!==2)return '';
+ s.pets[kind]=0;
+ s.money+=petPrices[kind];
+ if(encounter(s)?.stray===kind)encounter(s).stray=null;
+ return 'Đã bán '+(kind==='dog'?'chó':'mèo')+' cho người nhận nuôi tại chợ. +'+petPrices[kind]+'k.';
+}
 function service(s,a){
  const place=places[s.at], at=k=>place.services?.includes(k), buy=(item,price)=>{if(s.money<price)return 'Không đủ tiền.';s.money-=price;s.bag[item]++;return 'Đã cất vào túi.';};
  switch(a){
@@ -146,8 +198,26 @@ function service(s,a){
  }
  case 'sell': if(at('sell')&&s.bag.fish){const n=s.bag.fish;s.bag.fish=0;s.money+=n*16;return 'Bán '+n+' cá: +'+n*16+'k.';}return 'Cần có cá và tới Chợ Đồng Văn.';
  case 'photo': if(place.photo&&!s.photos.includes(place.id)){s.photos.push(place.id);return 'Đã lưu ảnh '+place.name+' · '+s.photos.length+'/3.';}return 'Điểm này đã lưu hoặc không có ảnh.';
- case 'waitPet': if(place.pet&&s.pets[place.pet]===0){s.pets[place.pet]=1;apply(s,{minutes:12});return 'Nó đã bớt e dè. Lần sau thử đặt đồ ăn xuống rồi lùi ra.';}return 'Chưa có bạn thú nào cần làm quen ở đây.';
- case 'befriend': if(place.pet&&s.pets[place.pet]===1&&s.bag.treats){s.bag.treats--;s.pets[place.pet]=2;return 'Thêm một bạn đồng hành. Nó tự chọn đi theo anh.';}return 'Cần làm quen trước và có một món ăn cho thú trong túi.';
+ case 'waitPet': {
+  const pet=localPet(s);
+  if(pet&&petProgress(s)===0){
+   const meeting=encounter(s);
+   if(place.pet)s.pets[pet]=1;else meeting.petTrust=true;
+   apply(s,{minutes:12});
+   if(meeting?.stray===pet)meeting.day=day(s);
+   return 'Nó đã bớt e dè. Thử đặt đồ ăn xuống rồi lùi ra.';
+  }
+  return 'Chưa có bạn thú nào cần làm quen ở đây.';
+ }
+ case 'befriend': {
+  const pet=localPet(s);
+  if(pet&&petProgress(s)===1&&s.bag.treats){
+   s.bag.treats--;s.pets[pet]=2;
+   if(encounter(s)?.stray===pet)encounter(s).stray=null;
+   return 'Thêm một bạn đồng hành. Nó sẽ đi theo anh như thú cưng.';
+  }
+  return 'Cần làm quen trước và có một món ăn cho thú trong túi.';
+ }
  default:return '';
  }
 }
@@ -160,5 +230,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue};
+return {fresh,time,day,weather,path,length,pointAt,profile,sample,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet};
 })();

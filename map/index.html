@@ -13,6 +13,7 @@
 </div>
 <div id="geo-panel" hidden>
 <iframe id="geo-frame" title="Bản đồ địa lý Hà Giang của OpenStreetMap" referrerpolicy="no-referrer"></iframe>
+<div class="geo-location"><button type="button" id="geo-locate">◎ Vị trí trong game</button><span id="geo-position"></span><a id="geo-google" target="_blank" rel="noopener noreferrer">Mở ghim trên Google Maps ↗</a></div>
 <div class="geo-actions"><a href="https://www.google.com/maps/dir/?api=1&amp;origin=H%C3%A0+Giang%2C+Vi%E1%BB%87t+Nam&amp;destination=%C4%90%C3%A8o+M%C3%A3+P%C3%AC+L%C3%A8ng&amp;waypoints=N%C3%BAi+%C4%90%C3%B4i+Qu%E1%BA%A3n+B%E1%BA%A1%7CY%C3%AAn+Minh%2C+H%C3%A0+Giang%7CCh%E1%BB%A3+%C4%90%E1%BB%93ng+V%C4%83n&amp;travelmode=driving" target="_blank" rel="noopener noreferrer">Xem cung đường trên Google Maps ↗</a><span>Bản đồ thật cần kết nối mạng.</span></div>
 </div>
 <div id="scene-panel" hidden>
@@ -24,7 +25,7 @@
 <div id="drive-controls" aria-label="Giữ nút để điều khiển">
 <button id="drive-left" aria-label="Sang trái (A)">◀︎</button><button id="drive-forward" aria-label="Tiến (W)">▲</button><button id="drive-back" aria-label="Lùi (S)">▼</button><button id="drive-right" aria-label="Sang phải (D)">▶︎</button>
 </div><div id="trail-extra"></div></div></section>
-<div id="pace" class="pace" aria-label="Tốc độ, độ dốc và thể trạng"><strong id="pace-speed">Đang dừng</strong><span id="pace-grade"></span><span id="pace-shape"></span></div>
+<div id="pace" class="pace" aria-label="Tốc độ, độ dốc, thời tiết và thể trạng"><strong id="pace-speed">Đang dừng</strong><span id="pace-grade"></span><span id="pace-shape"></span><span id="pace-weather"></span></div>
 <div id="map-nav" class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
 <div id="map-caption" class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
 </section>
@@ -32,7 +33,7 @@
 <div class="eyebrow" id="place-tag">ĐIỂM DỪNG</div><h2 id="place"></h2>
 <p id="summary"></p><figure id="photo" hidden><img id="image" alt="" referrerpolicy="no-referrer"><figcaption id="credit"></figcaption></figure>
 <div class="actions" id="actions"></div>
-</div><div class="card notebook"><div class="eyebrow">TÚI ĐỒ &amp; NHẬT KÝ</div><div id="bag"></div><div id="mission"></div><p id="message" role="status"></p><details><summary>Các điểm trên tuyến</summary><div id="directory"></div></details><button id="reset" class="subtle">Bắt đầu lại</button></div></aside>
+</div><div class="card notebook"><div class="eyebrow">TÚI ĐỒ &amp; NHẬT KÝ</div><div id="bag"></div><div id="mission"></div><p id="party" hidden></p><p id="message" role="status"></p><details><summary>Các điểm trên tuyến</summary><div id="directory"></div></details><button id="reset" class="subtle">Bắt đầu lại</button></div></aside>
 </div>
 <footer>Giữ WASD, phím mũi tên hoặc nút dưới cảnh 3D để tự di chuyển. Sơ đồ theo dõi vị trí trong game. Tuyến và dịch vụ được mô phỏng. Ảnh có ghi tác giả và giấy phép.</footer>
 </main><script src="data.js"></script><script src="engine.js"></script><script src="hiker3d.js"></script><script src="scene3d.js"></script><script src="map.js"></script></body></html>

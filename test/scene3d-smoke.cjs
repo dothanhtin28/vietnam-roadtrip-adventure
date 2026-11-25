@@ -8,6 +8,10 @@ assert(Math.abs(up.distance-down.distance)<1e-6);
 assert(E.grade(up.profile,mid)>.04 && E.grade(down.profile,mid)<-.04);
 const good={...fresh(),food:100,water:100,health:100,energy:100}, baseline=E.pace(up,mid,good);
 assert(baseline.speed<E.pace(down,mid,good).speed);
+assert.deepEqual([450,600,800,970,1200].map(clock=>E.weather(clock).kind),['clear','heat','rain','wind','night']);
+assert(E.pace(up,mid,good,0,1,600).speed<baseline.speed);
+assert(E.pace(up,mid,good,0,1,800).speed<E.pace(up,mid,good,0,1,600).speed);
+assert(E.weather(970).mud>0,'The road stays muddy after the rain');
 for(const k of ['food','water','health','energy']){
  const low={...good,[k]:25};
  assert(E.pace(up,mid,low).speed<baseline.speed,k+' must slow movement');
@@ -26,12 +30,19 @@ const scene=S.attach(canvas);assert(scene&&S.attach({getContext:()=>null})===nul
 for(const [idx,mode] of ['walk','bike','moto','car'].entries()){
  const plan=E.trip(0,7,mode);
  scene.reset();polygons=0;keyframes=[];
- for(const fraction of [0,.28,.52,.92,1])scene.render({route:plan.profile,d:plan.distance*fraction,mode,moving:true,seconds:idx+.7,orbit:fraction-.35,hazard:plan.hazards[0],pets:['dog','cat']});
+ for(const fraction of [0,.28,.52,.92,1])scene.render({route:plan.profile,d:plan.distance*fraction,mode,moving:true,seconds:idx+.7,orbit:fraction-.35,hazard:plan.hazards[0],pets:['dog','cat'],companion:'fern',clock:fraction<.52?800:970});
  assert(polygons>3000,mode+' should render all parts of the route');
  assert(keyframes.some(k=>typeof k==='string'&&k.startsWith('rgb(')));
 }
 assert(Number.isFinite(S.land(580,420)));
 const Rig=c.WindHiker, rig=Rig.create();
+const gait=Array.from({length:100},()=>rig.pose({moving:true,speed:.98,actualSpeed:21,dt:1/60}));
+assert(gait.some(p=>p.feet[0]>.12),'Walking should land heel-first');
+assert(gait.some(p=>p.feet[0]<-.25),'Walking should push off from the toes');
+assert(gait.some(p=>p.legs[0][2][1]>p.legs[1][2][1]+.10),'One foot should lift while the other supports the body');
+assert(rig.pose({trekking:true}).poles);
+assert(!rig.pose({trekking:true,mode:'bike'}).poles);
+rig.reset();
 const tank=rig.pose({seconds:1}), rest=Array.from({length:30},(_,i)=>rig.pose({action:'rest',actionTime:i/30,seconds:2+i/30})).at(-1);
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
 for(const action of ['fish','reel','meal','drink','rest','photo']){

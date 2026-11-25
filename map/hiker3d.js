@@ -7,10 +7,19 @@ globalThis.WindHiker=(()=>{
  const unit=a=>times(a,1/(Math.hypot(...a)||1)), dot=(a,b)=>a.reduce((r,v,i)=>r+v*b[i],0);
  const between=(a,b,t)=>a.map((v,i)=>mix(v,b[i],t));
  const sun=unit([-.65,.83,-.48]);
- const fabric={jacket:[204,104,55],light:[236,150,83],cuff:[118,67,50],pants:[52,69,81],pantsEdge:[73,91,98],shoe:[96,69,53],sole:[44,46,44],skin:[217,157,112],shade:[172,105,78],hair:[39,34,30],green:[66,113,104],greenDark:[49,78,75],strap:[63,65,52],trim:[218,184,105],metal:[163,169,148],bottle:[113,182,171],scarf:[93,128,112],white:[239,219,178]};
+ const fabric={jacket:[103,120,63],light:[140,151,83],cuff:[63,73,51],pants:[115,92,68],pantsEdge:[84,79,66],shoe:[99,71,48],sole:[44,46,44],skin:[231,169,127],shade:[188,112,83],hair:[48,35,28],green:[103,110,63],greenDark:[63,79,48],strap:[98,75,58],trim:[212,174,107],metal:[163,169,148],bottle:[103,150,151],scarf:[76,102,81],white:[248,231,200]};
+ const outfits={
+  fern:{jacket:[105,131,75],light:[151,171,100],green:[169,110,70],greenDark:[110,75,57]},
+  indigo:{jacket:[65,100,150],light:[109,144,183],green:[151,120,68],greenDark:[104,82,54]},
+  plum:{jacket:[143,85,120],light:[181,124,154],green:[107,128,79],greenDark:[75,93,60]},
+  woman:{jacket:[138,67,78],light:[188,116,122],pants:[61,79,90],cuff:[110,59,72],scarf:[170,124,76]},
+  elder:{jacket:[77,100,107],light:[107,128,130],pants:[75,76,70],hair:[171,169,157],scarf:[129,125,109]},
+  child:{jacket:[216,148,64],light:[242,183,87],pants:[62,92,110],cuff:[160,103,53]}
+ };
  const rings=Array.from({length:13},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
- function draw(face,world,pose,mode,hurt=false){
-  const F=fabric, orange=hurt?[224,104,79]:F.jacket;
+ function draw(face,world,pose,mode,hurt=false,outfit){
+  const F=outfit?{...fabric,...outfits[outfit]}:fabric, orange=hurt?[224,104,79]:F.jacket;
+  const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum'].includes(outfit);
   const tilt=pose.lean, slant=(p)=>{
    const y=p[1]-1.14,roll=pose.roll;return [p[0]*Math.cos(roll)+y*Math.sin(roll),1.14+y*Math.cos(roll)-p[0]*Math.sin(roll)+pose.bob,p[2]+y*tilt];
   };
@@ -22,6 +31,7 @@ globalThis.WindHiker=(()=>{
   // Rounded ring loft, used for cloth, leather and facial planes. The shared
   // normals are averaged around each ring instead of shading boxes.
   function loft(rows,c,n=10,bend=null,ao=1){
+   if(local)n=Math.min(n,6);
    const ring=rings[n];
    const q=rows.map(([cx,y,cz,rx,rz])=>ring.map(([x,z])=>{
     const p=[cx+x*rx,y,cz+z*rz];return bend?bend(p):p;
@@ -36,8 +46,10 @@ globalThis.WindHiker=(()=>{
    const [x,y,z]=p;loft([[x,y-ry,z,rx*.33,rz*.34],[x,y-ry*.61,z,rx*.81,rz*.80],[x,y,z,rx,rz],[x,y+ry*.62,z,rx*.84,rz*.81],[x,y+ry,z,rx*.31,rz*.34]],c,n,bend,ao);
   }
   function limb(a,b,r1,r2,c,n=8){
+   if(local)n=Math.min(n,6);
    const axis=unit(sub(b,a)),u=unit(cross(axis,Math.abs(axis[1])>.90?[0,0,1]:[0,1,0])),v=cross(axis,u);
-   const profile=[[0,r1*.72],[.13,r1],[.67,mix(r1,r2,.58)],[.90,r2],[1,r2*.76]];
+   const profile=local?[[0,r1*.83],[.45,mix(r1,r2,.34)],[1,r2*.85]]
+    :[[0,r1*.72],[.13,r1],[.67,mix(r1,r2,.58)],[.90,r2],[1,r2*.76]];
    const row=profile.map(([t,r])=>rings[n].map(([x,y])=>plus(between(a,b,t),plus(times(u,x*r),times(v,y*r)))));
    for(let k=1;k<row.length;k++)for(let i=0;i<n;i++){
     const j=(i+1)%n,normal=unit(plus(times(u,rings[n][i][0]+rings[n][j][0]),times(v,rings[n][i][1]+rings[n][j][1])));
@@ -65,15 +77,27 @@ globalThis.WindHiker=(()=>{
   limb(upper([0,1.92,.025]),upper([0,2.045,.033]),.099,.112,F.skin,8);
   const yaw=pose.faceYaw, hyaw=Math.sin(yaw), hcos=Math.cos(yaw), nod=pose.lookUp;
   const head=p=>{
-   const x=p[0],y=p[1]-2.18,z=p[2]-.05;
+   const scale=hero?1.19:outfit==='child'?1.13:1;
+   const x=p[0]*scale,y=(p[1]-1.99)*scale-.19,z=(p[2]-.05)*scale;
    return upper([x*hcos+z*hyaw,2.18+y*Math.cos(nod)+z*Math.sin(nod),.05+z*hcos-x*hyaw]);
   };
   loft([[0,1.98,.041,.064,.068],[0,2.01,.057,.122,.126],[0,2.08,.052,.171,.167],[0,2.18,.040,.193,.179],[0,2.29,.025,.173,.164],[0,2.37,.018,.101,.105]],F.skin,12,head);
   for(const x of [-.185,.185]){blob([x,2.14,.025],.047,.064,.037,F.skin,8,head);blob([x*1.14,2.14,.034],.012,.036,.020,F.shade,6,head,.92);}
   // Side-swept, angular-soft black hair. The rear fall and fringe are distinct.
   loft([[0,2.103,-.064,.155,.090],[0,2.17,-.040,.192,.125],[0,2.235,-.024,.202,.152],[0,2.328,.004,.182,.168],[.014,2.395,.015,.127,.127],[.039,2.425,.010,.048,.068]],F.hair,12,head);
-  blob([-.075,2.33,.118],.143,.071,.107,[52,41,33],10,head);
+  blob([-.075,2.33,.118],.143,.071,.107,F.hair,10,head);
   blob([.069,2.31,.122],.116,.048,.099,F.hair,8,head);
+  if(hero){
+   const khaki=[150,133,93];
+   loft([[0,2.325,-.023,.218,.188],[0,2.38,-.025,.222,.187],[0,2.44,-.025,.182,.158],[0,2.49,-.04,.094,.101],[0,2.503,-.048,.035,.043]],khaki,12,head);
+   loft([[0,2.308,.14,.179,.171],[0,2.329,.142,.20,.186],[0,2.357,.123,.207,.172]],khaki,12,head,.89);
+   blob([0,2.406,.139],.060,.025,.012,[193,163,98],8,head);
+  }
+  if(feminine){
+   blob([0,2.18,-.157],.123,.109,.076,F.hair,10,head);
+   limb(head([0,2.18,-.195]),upper([.09,1.83,-.255]),.071,.041,F.hair,8);
+   blob([.01,2.15,-.22],.045,.021,.042,[183,94,73],8,head);
+  }
   for(const sign of [-1,1]){
    const x=.071*sign, blink=pose.blink;
    blob([x,2.187,.195],.034,.026*blink,.010,F.white,6,head);
@@ -85,6 +109,7 @@ globalThis.WindHiker=(()=>{
   limb(head([.006,2.062,.188]),head([.042,2.075,.174]),.006,.004,[132,76,61],6);
   // Moss-green rucksack with a rounded sleeping roll, shoulder straps, a
   // closure flap, woven detail, buckles and a bottle in one side pocket.
+  if(!local){
   const pack=p=>upper([p[0]+pose.pack*(p[1]-1.1)*.08,p[1]+pose.pack*.013,p[2]+pose.pack*.032]);
   loft([[0,1.07,-.251,.153,.092],[0,1.13,-.303,.233,.153],[0,1.37,-.324,.267,.175],[0,1.62,-.322,.259,.164],[0,1.77,-.294,.221,.131],[0,1.83,-.258,.151,.084]],F.greenDark,12,pack);
   loft([[0,1.24,-.426,.123,.057],[0,1.30,-.447,.203,.088],[0,1.47,-.448,.207,.077],[0,1.55,-.420,.170,.053]],F.green,10,pack);
@@ -103,14 +128,18 @@ globalThis.WindHiker=(()=>{
   blob([.26,1.56,-.335],.055,.029,.054,F.metal,8,pack);
   // Jagged mountain-shaped woven trail badge on the back pocket.
   emit([pack([-.065,1.402,-.529]),pack([-.026,1.462,-.531]),pack([.005,1.431,-.529]),pack([.029,1.455,-.528]),pack([.075,1.401,-.527])],F.trim,1.04,[0,0,-1]);
+  }
   for(const side of [-1,1]){
-   const [hip,knee,ankle]=pose.legs[side===1?1:0];
+   const index=side===1?1:0;
+   const [hip,knee,ankle]=pose.legs[index];
    limb(hip,knee,.150,.118,F.pants,9);limb(knee,ankle,.116,.079,F.pants,9);
    blob(knee,.118,.131,.113,F.pantsEdge,8,null,.98);
    const [x,y,z]=ankle;
-   loft([[x,y-.12,z+.055,.085,.168],[x,y-.105,z+.075,.116,.202],[x,y-.057,z+.075,.118,.205],[x,y-.038,z+.07,.09,.181]],F.sole,9);
-   loft([[x,y-.053,z+.077,.108,.189],[x,y-.012,z+.086,.112,.188],[x,y+.056,z+.049,.103,.153],[x,y+.128,z+.015,.091,.097],[x,y+.159,z,.075,.078]],F.shoe,9);
-   for(let l=0;l<3;l++)limb([x-.06,y+.049+l*.023,z+.128-l*.017],[x+.06,y+.058+l*.023,z+.119-l*.017],.010,.011,F.trim,6);
+   const pitch=pose.feet[index],sin=Math.sin(pitch),cos=Math.cos(pitch);
+   const rotateBoot=([a,b,c])=>[a,y+(b-y)*cos+(c-z)*sin,z+(c-z)*cos-(b-y)*sin];
+   loft([[x,y-.12,z+.055,.085,.168],[x,y-.105,z+.075,.116,.202],[x,y-.057,z+.075,.118,.205],[x,y-.038,z+.07,.09,.181]],F.sole,9,rotateBoot);
+   loft([[x,y-.053,z+.077,.108,.189],[x,y-.012,z+.086,.112,.188],[x,y+.056,z+.049,.103,.153],[x,y+.128,z+.015,.091,.097],[x,y+.159,z,.075,.078]],F.shoe,9,rotateBoot);
+   if(!local)for(let l=0;l<3;l++)limb(rotateBoot([x-.06,y+.049+l*.023,z+.128-l*.017]),rotateBoot([x+.06,y+.058+l*.023,z+.119-l*.017]),.010,.011,F.trim,6);
   }
   const arms=pose.arms.map(a=>a.map(upper));
   arms.forEach(([shoulder,elbow,hand],i)=>{
@@ -121,6 +150,19 @@ globalThis.WindHiker=(()=>{
    blob(plus(end,[i?-.045:.045,.014,.035]),.028,.052,.033,F.skin,6);
   });
   const act=pose.action,hand=arms[1][2],left=arms[0][2];
+  const pole=(grip,tip)=>{
+   const head=plus(grip,[0,.11,0]),joint=between(grip,tip,.60);
+   limb(head,between(grip,tip,.12),.039,.029,[67,58,46],8);
+   limb(grip,joint,.017,.013,[143,99,52],6);
+   limb(joint,tip,.012,.006,F.metal,6);
+  };
+  if(hero&&pose.poles){
+   for(const [i,grip] of [left,hand].entries()){
+    const side=i===0?-1:1,foot=pose.legs[1-i][2];
+    pole(grip,[grip[0]+side*.16,.024,foot[2]-.20]);
+   }
+  }
+  if(outfit==='elder')pole(hand,[.55,.026,.28]);
   if(pose.activity>.12){
    if(act==='fish'||act==='reel'){
     const tip=plus(hand,[.17,.17+pose.castArc*.45,1.04-pose.castArc*.29]);
@@ -141,29 +183,36 @@ globalThis.WindHiker=(()=>{
    }
   }
  }
- function create(){
-  let phase=0,blend=0,run=0,mixActivity=0,lastAction='',faceYaw=0;
-  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false}){
+ function create(gaitOffset=0){
+  let phase=gaitOffset,blend=0,run=0,mixActivity=0,lastAction='',faceYaw=0;
+  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false,trekking=false}){
    dt=clamp(dt,0,.08);
    const damp=(k)=>1-Math.exp(-dt*k);
-   const effort=clamp(Math.abs(actualSpeed)/29,0,1.35);
-   blend=mix(blend,moving?Math.max(.18,Math.min(effort+.24,1)):0,damp(moving?10:14));
+   const effort=clamp(Math.abs(actualSpeed)/26,0,1.25);
+   blend=mix(blend,moving?Math.max(.08,Math.min(effort+.08,1)):0,damp(15));
    run=mix(run,clamp((speed-1.015)*6,0,1)*Math.min(1,effort),damp(5));
-   if(moving)phase=(phase+dt*(mode==='walk'?mix(6.4,12.5,effort/1.35):8.5))%TAU;
+   if(moving)phase=(phase+dt*(mode==='walk'?mix(5.9,10.2,effort/1.25):8.5))%TAU;
    if(action)lastAction=action;
    mixActivity=mix(mixActivity,action?1:0,damp(action?8:5));faceYaw=mix(faceYaw,clamp(turn,-.6,.6)*.45,damp(6));
    const actions={rest:lastAction==='rest'?mixActivity:0};
    const rolling=mode!=='walk', sit=actions.rest, breathing=Math.sin(seconds*2.4);
    const lean=(rolling?.25:.055+run*.19)*blend,stride=rolling?.23:mix(.39,.49,run);
-   const swing=Math.cos(phase),bob=(reduced?.38:1)*(Math.cos(phase*2)*blend*.034+breathing*.012);
+   const swing=Math.cos(phase),bob=(reduced?.38:1)*(-Math.cos(phase*2)*blend*.025+breathing*.009);
    const hips=1.10-sit*.58-(rolling?.08:0)+bob;
+   const feet=[];
    const legs=[-1,1].map(sign=>{
-    const t=(phase+(sign===1?PI:0))%TAU/TAU,stance=.61;
+    const t=(phase+(sign===1?PI:0))%TAU/TAU,stance=.64;
     const recovery=clamp((t-stance)/(1-stance),0,1);
-    const fore=(t<stance?1-2*t/stance:-Math.cos(recovery*PI))*stride*blend;
-    const lift=Math.sin(recovery*PI)*blend*(.19+run*.08);
+    const fore=(t<stance?1-2*t/stance:-Math.cos(recovery*PI))*stride*blend*(1-sit);
+    const lift=Math.sin(recovery*PI)**1.35*blend*(.18+run*.05)*(1-sit);
+    // Land on the heel, pass through a flat stance, then push off the toe.
+    const pitch=rolling?0:(t<stance
+     ?.24*Math.max(0,1-t/.14)**2-.43*clamp((t-.44)/(stance-.44),0,1)**2
+     :mix(-.43,.24,recovery))*blend*(1-sit);
+    feet.push(pitch);
+    const pivot=pitch<0?.245:-.112;
     const pedal=mode==='bike'?blend:0;
-    const foot=[sign*(.153+sit*.086),.137+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift),
+    const foot=[sign*(.153+sit*.086),.123+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift-pivot*Math.sin(pitch)),
      (rolling?.13+pedal*.23*Math.cos(t*TAU):fore)+sit*.56];
     const hip=[sign*.158,hips,sit*-.11];
     if(rolling||sit>.01)return [hip,[sign*(.168+sit*.074),mix(.59,.35,sit),foot[2]*.65+.12],foot];
@@ -182,16 +231,17 @@ globalThis.WindHiker=(()=>{
     if(last==='photo')to=[sign*.113,2.069,.313];
     return between(base,to,mixActivity);
    }
+   const poles=trekking&&mode==='walk'&&mixActivity<.10;
    const arms=[-1,1].map(sign=>{
     const strideZ=swing*sign*stride*blend;
-    const hand=actionHand(sign,[sign*.465,rolling?1.24:1.085+run*.12,rolling?.49:strideZ]);
+    const hand=actionHand(sign,[sign*.465,rolling?1.24:poles?1.27:1.085+run*.12,rolling?.49:strideZ+(poles?.21:0)]);
     const elbow=[sign*(.43+(rolling?.03:0)),mix(1.39,(1.54+hand[1])*.5,mixActivity),mix(rolling?.28:strideZ*.49-.066,hand[2]*.5-.08,mixActivity)];
     return [[sign*.347,1.728,0],elbow,hand];
    });
    const blink=1-.93*Math.pow(Math.max(0,Math.cos(seconds*1.37+1.3)),95);
    const roll=(reduced?.5:1)*(swing*blend*.049+turn*(rolling?.18:.075));
-   return {legs,arms,blink,faceYaw,lean,roll,crouch:sit,actions,pack:swing*blend,lookUp:lastAction==='drink'?mixActivity*.24:0,bob,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4)};
-  },reset(){phase=0;blend=0;run=0;mixActivity=0;lastAction='';faceYaw=0;}};
+   return {legs,feet,arms,poles,blink,faceYaw,lean,roll,crouch:sit,actions,pack:swing*blend,lookUp:lastAction==='drink'?mixActivity*.24:0,bob,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4)};
+  },reset(){phase=gaitOffset;blend=0;run=0;mixActivity=0;lastAction='';faceYaw=0;}};
  }
  return {create,draw};
 })();

@@ -26,5 +26,19 @@ const modes={
  bike:{name:'Xe đạp',icon:'🚲',price:40,energy:34,speed:153,time:10,fuel:0,impact:20},
  moto:{name:'Xe máy',icon:'🛵',price:95,energy:76,speed:218,time:15,fuel:1,impact:28},
  car:{name:'Ô tô',icon:'🚙',price:160,energy:108,speed:245,time:17,fuel:2,impact:15}
-};return {places,roads,modes};
+};
+// Latitude and longitude anchors for the game's compressed route. Fictional
+// stops sit between the actual landmarks rather than representing addresses.
+const geoAnchors=[
+ [22.8233,104.9849], [22.8612,104.9855], [22.9584,104.9928],
+ [23.0390,105.0042], [23.1176,105.1433], [23.2302,105.2744],
+ [23.2763,105.3612], [23.1955,105.4127]
+];
+const companions={
+ linh:{name:'Linh',bio:'Một người mê chụp ảnh, đang tìm đường lên cao nguyên.',chance:.68,outfit:'fern'},
+ minh:{name:'Minh',bio:'Một phượt thủ đang nghỉ chân và cân nhắc chặng tiếp theo.',chance:.52,outfit:'indigo'},
+ thao:{name:'Thảo',bio:'Một bạn đi bộ đường dài đang ngắm cảnh bên đường.',chance:.60,outfit:'plum'}
+};
+const petPrices={dog:38,cat:30};
+return {places,roads,modes,geoAnchors,companions,petPrices};
 })();

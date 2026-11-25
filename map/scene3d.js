@@ -58,20 +58,64 @@ for(let i=0;i<shoulders.length;i++){
  }
 }
 const houses=D.places.flatMap((p,i)=>{
- if(!p.services?.includes('shop'))return [];
+ const village=p.services?.includes('shop')||p.id==='dog'||p.id==='cat';
+ if(!village)return [];
  const route=E.profile(i, i<D.places.length-1?i+1:i-1),a=E.sample(route,10), b=route[0], len=Math.hypot(a.x-b.x,a.z-b.z)||1, nx=(a.z-b.z)/len,nz=(b.x-a.x)/len;
- return [-1,1].flatMap((sign,k)=>[0,1,2].map((j)=>{
-  const x=p.x+sign*nx*(15+j*8)+(j-1)*3,z=p.y+sign*nz*(15+j*8)+(j-1)*6;
-  return {x,z,h:land(x,z),w:3+j*.7,tint:(i+k)%2};
- }));
+ const town=p.id==='start'||p.id==='yen'||p.id==='dong',count=town?6:3;
+ return [-1,1].flatMap((sign,k)=>Array.from({length:count},(_,j)=>{
+  const step=(j-(count-1)*.5)*(town?9:8);
+  const x=p.x+sign*nx*(12+(j%2)*5)-nz*step,z=p.y+sign*nz*(12+(j%2)*5)+nx*step;
+  if(nearest(x,z).dist<7)return null;
+  const yaw=Math.atan2(nx*sign,nz*sign);
+  return {x,z,h:land(x,z),w:(town?4.1:3.2)+rand(i+j+sign)*1.5,tint:(i+k+j)%3,yaw,shop:town&&j%3===1};
+ }).filter(Boolean));
+});
+const residents=[
+ [0,23,-8,'woman'],[0,36,9,'elder'],[0,39,11,'child'],[2,14,-8,'child'],
+ [2,37,-11,'woman'],[4,12,9,'elder'],[4,22,10,'woman'],[4,35,-9,'child'],
+ [6,9,10,'woman'],[6,17,8,'child'],[6,27,-9,'elder']
+].map(([stop,d,offset,outfit])=>{
+ const route=E.profile(stop,stop+1),p=E.sample(route,d),q=E.sample(route,d+2);
+ const angle=Math.atan2(q.x-p.x,q.z-p.z),x=p.x+Math.cos(angle)*offset,z=p.z-Math.sin(angle)*offset;
+ const size=outfit==='child'?.58:outfit==='elder'?.86:.94;
+ return {x,z,angle,size,outfit,phase:d*.79,rig:WindHiker.create(d%5)};
+});
+const farms=[
+ [0,40,1,'tea'],[0,82,-1,'rice'],[1,79,1,'tea'],[2,50,-1,'rice'],
+ [3,88,1,'rice'],[4,62,-1,'tea'],[5,54,1,'rice']
+].map(([stop,d,side,kind])=>{
+ const route=E.profile(stop,stop+1),p=E.sample(route,d),q=E.sample(route,d+4);
+ const length=Math.hypot(q.x-p.x,q.z-p.z)||1,ax=(q.x-p.x)/length,az=(q.z-p.z)/length;
+ const surface=(along,across)=>{
+  const curve=across+Math.sin(along*.095)*2.6+along*along*.006;
+  const x=p.x+ax*along+az*side*curve,z=p.z+az*along-ax*side*curve;
+  return {x,z,h:land(x,z)+.12};
+ };
+ const rows=[];
+ for(let row=0;row<7;row++){
+  const across=13+row*4.3;
+  for(let j=0;j<12;j++){
+   const t=(j-6)*4.7,a=surface(t,across),b=surface(t+4.7,across);
+   const c=surface(t+4.7,across+3.5),d=surface(t,across+3.5);
+   if([a,b,c,d].some(v=>nearest(v.x,v.z).dist<8))continue;
+   const crop=surface(t+2.35,across+1.55);
+   rows.push({a,b,c,d,crop,tint:(row+j)%4});
+  }
+ }
+ return {x:p.x,z:p.z,kind,rows};
 });
 function attach(canvas){
  let ctx=null;
  try{ctx=canvas.getContext('2d',{alpha:false});}catch{}
  if(!ctx)return null;
- let angle=null,camera=null,lastFrame=null,actorYaw=null,zoom=1,wheelAngle=0,backwards=false;
- const actor=WindHiker.create();
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,hazard=null,damage=false,pets=[],offset=0,speed=0,actualSpeed=0,action='',actionTime=0,steer=0,reduced=false})=>{
+ let angle=null,camera=null,lastFrame=null,actorYaw=null,zoom=1,wheelAngle=0,backwards=false,wet=null,rain=null,heat=null,dark=null;
+ const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
+ const image=src=>{
+  if(typeof Image==='undefined')return null;
+  const bitmap=new Image();bitmap.src=src;return bitmap;
+ };
+ const panorama=image('assets/ha-giang-panorama.webp'),terraces=image('assets/rice-terraces.webp'),tree=image('assets/cypress.webp');
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
@@ -81,6 +125,11 @@ function attach(canvas){
   const pos=add(base,Math.cos(direction)*offset,0,-Math.sin(direction)*offset);
   if(Math.abs(offset)>3.5)pos.h=Math.max(base.h-.2,land(pos.x,pos.z));
   const dt=lastFrame===null?.033:cap(seconds-lastFrame,0,.08);lastFrame=seconds;
+  const weatherMix=(current,next)=>current===null?next:mix(current,next,1-Math.exp(-dt*2.4));
+  const minute=clock%1440,dusk=Math.max(1-cap((minute-300)/125,0,1),cap((minute-1020)/125,0,1));
+  wet=weatherMix(wet,weather.mud);rain=weatherMix(rain,weather.kind==='rain'?1:0);
+  heat=weatherMix(heat,weather.kind==='heat'?1:0);dark=weatherMix(dark,dusk);
+  const gust=weather.kind==='wind'?1.85:.65+rain*.8;
   const angular=(old,want,alpha)=>old===null?want:old+Math.atan2(Math.sin(want-old),Math.cos(want-old))*alpha;
   if(actualSpeed!==0)backwards=actualSpeed<0;
   if(!moving&&d===0)backwards=false;
@@ -98,30 +147,37 @@ function attach(canvas){
   wheelAngle+=actualSpeed*dt/.42;
   const cam=camera,pitch=.08,cp=Math.cos(pitch),sp=Math.sin(pitch),focal=Math.min(W*.91,H*1.07)*zoom,horizon=H*.43;
   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#5b9fae');bg.addColorStop(.38,'#b3d0c3');bg.addColorStop(.62,'#f3e8bb');bg.addColorStop(1,'#9eb389');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-  const sunX=W*(.74+.19*Math.sin(angle+.9)),sunY=H*.16,sunR=Math.min(W,H)*.045;
-  for(let l=5;l>=0;l--){
-   ctx.beginPath();ctx.arc(sunX,sunY,sunR*(1+l*.54),0,Math.PI*2);
-   ctx.fillStyle=l?'rgba(255,237,178,.055)':'#fff1c5';ctx.fill();
-  }
-  for(let i=0;i<6;i++){
-   const bearing=i*Math.PI/3+.62;
-   const relative=Math.atan2(Math.sin(bearing-angle),Math.cos(bearing-angle));
-   if(Math.abs(relative)>.97)continue;
-   const x=W*(.5+relative*.65),y=H*(.12+rand(i+8)*.17),width=W*(.115+rand(i+6)*.14);
-   ctx.beginPath();ctx.moveTo(x-width*.55,y);
-   for(let j=0;j<=12;j++){
-    const t=j/12;
-    ctx.lineTo(x+(t-.5)*width,y-Math.sin(t*Math.PI)*H*(.014+.009*Math.sin(t*23+i)));
+  if(panorama?.naturalWidth){
+   const plate=(bitmap,opacity,y)=>{
+    const span=Math.max(W*1.52,H*1.9),height=span*bitmap.naturalHeight/bitmap.naturalWidth;
+    const shift=(angle-2.25)*span/Math.PI+span*.23;
+    for(let i=Math.floor(shift/span);i*span-shift<W;i++){
+     const x=i*span-shift,mirrored=i%2!==0;
+     ctx.save();ctx.globalAlpha=opacity;
+     if(mirrored){ctx.translate(x+span,0);ctx.scale(-1,1);}
+     ctx.drawImage(bitmap,mirrored?0:x,H*y-height*.48,span+1,height);
+     ctx.restore();
+    }
+   };
+   plate(panorama,1,.15);
+   if(terraces?.naturalWidth){
+    const distance=Math.min(...farms.filter(f=>f.kind==='rice').map(f=>Math.hypot(pos.x-f.x,pos.z-f.z)));
+    const opacity=cap((145-distance)/105,0,1);
+    if(opacity>0)plate(terraces,opacity,.12);
    }
-   ctx.lineTo(x+width*.54,y+H*.006);ctx.lineTo(x-width*.32,y+H*.012);
-   ctx.closePath();ctx.fillStyle='rgba(255,246,217,.35)';ctx.fill();
-  }
-  for(let l=0;l<5;l++){
-   ctx.beginPath();ctx.moveTo(-10,H*.75);
-   for(let j=-1;j<53;j++){const x=j*W/50,u=(j/50-.5)*1.5+angle+l*.79;
-    const ridge=Math.abs(Math.sin(u*3.8)*Math.cos(u*2.05)+.31*Math.sin(u*9.2)+.12*Math.sin(u*17.1));
-    ctx.lineTo(x,H*(.40+l*.044-(.085+l*.012)*ridge));
-   }ctx.lineTo(W+W/20,H*.82);ctx.closePath();ctx.fillStyle=['#b9d1ca','#a5c4be','#91b4ad','#7da297','#6a8e80'][l];ctx.fill();
+  }else{
+   const sunX=W*(.74+.19*Math.sin(angle+.9)),sunY=H*.16,sunR=Math.min(W,H)*.045;
+   for(let l=5;l>=0;l--){
+    ctx.beginPath();ctx.arc(sunX,sunY,sunR*(1+l*.54),0,Math.PI*2);
+    ctx.fillStyle=l?'rgba(255,237,178,.055)':'#fff1c5';ctx.fill();
+   }
+   for(let l=0;l<4;l++){
+    ctx.beginPath();ctx.moveTo(-10,H*.75);
+    for(let j=-1;j<53;j++){const x=j*W/50,u=(j/50-.5)*1.5+angle+l*.79;
+     const ridge=Math.abs(Math.sin(u*3.8)*Math.cos(u*2.05)+.31*Math.sin(u*9.2)+.12*Math.sin(u*17.1));
+     ctx.lineTo(x,H*(.40+l*.056-(.085+l*.012)*ridge));
+    }ctx.lineTo(W+W/20,H*.82);ctx.closePath();ctx.fillStyle=['#b9d1ca','#a5c4be','#91b4ad','#7da297'][l];ctx.fill();
+   }
   }
   const tr=p=>{
    const x=p.x-cam.x,z=p.z-cam.z,y=p.h-cam.h,f=x*fx+z*fz;
@@ -140,7 +196,8 @@ function attach(canvas){
    const depth=clipped.reduce((n,p)=>n+p[2],0)/clipped.length, haze=cap((depth-35)/325,0,.86);
    const screen=clipped.map(([x,y,z])=>[W*.5+x*focal/z,horizon-y*focal/z]);
    if(screen.every(p=>p[0]<-4)||screen.every(p=>p[0]>W+4)||screen.every(p=>p[1]<-4)||screen.every(p=>p[1]>H+4))return;
-   faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',depth:depth+bias,layer});
+   const opacity=layer===0&&panorama?.naturalWidth?1-cap((depth-75)/175,0,.87):1;
+   faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',depth:depth+bias,layer,opacity});
   }
   const baseX=Math.floor(cam.x/STEP)*STEP,baseZ=Math.floor(cam.z/STEP)*STEP;
   for(let oz=-19;oz<=19;oz++)for(let ox=-19;ox<=19;ox++){
@@ -148,20 +205,51 @@ function attach(canvas){
    if(forward<-25||forward>320||Math.abs(cx*rx+cz*rz)>42+forward*1.12)continue;
    const q=[grid(x,z),grid(x+STEP,z),grid(x+STEP,z+STEP),grid(x,z+STEP)];
    const tint=cap((q[0].h-38)/165,0,.92),color=prairie.map((n,j)=>mix(n,rock[j],tint));
-   const light=cap(1+(q[1].h-q[0].h)*.018-(q[3].h-q[0].h)*.014,.72,1.23);
-   face([q[0],q[1],q[2]],color,light*(.93+rand(x*11+z)*.14));
-   face([q[0],q[2],q[3]],color,light*(.94+rand(x*7+z)*.12));
+   const light=cap(1+(q[1].h-q[0].h)*.013-(q[3].h-q[0].h)*.010,.79,1.19);
+   const mottling=.95+rand(x*11+z)*.11;
+   face([q[0],q[1],q[2]],color,light*mottling);
+   face([q[0],q[2],q[3]],color,light*mottling);
+  }
+  layer=.65;
+  for(const farm of farms){
+   if(Math.hypot(farm.x-cam.x,farm.z-cam.z)>145)continue;
+   const tea=farm.kind==='tea';
+   for(const row of farm.rows){
+   const {a,b,c,d,crop,tint}=row;
+    const [side,,depth]=tr(crop);
+    if(depth<-5||depth>142||Math.abs(side)>15+depth*1.22)continue;
+    face([a,b,c,d],tea?[105,120,66]:[167,157,85],.92+tint*.029);
+    if(depth<85)face([d,c,add(c,0,-.56,0),add(d,0,-.56,0)],[109,103,67],.89);
+    if(tea){
+     const top=add(crop,0,.78+tint*.05,0),r=1.3;
+     const rim=[add(crop,-r,.28,0),add(crop,0,.32,r*.68),add(crop,r,.28,0),add(crop,0,.31,-r*.68)];
+     for(let i=0;i<4;i++)face([rim[i],rim[(i+1)%4],top],i<2?[72,116,59]:[108,147,66],.96+tint*.037);
+    }else{
+     for(const side of depth<58?[-1,0,1]:[0]){
+      const p=add(crop,side*.86,.015,side*.43);
+      face([add(p,-.21,0,0),add(p,.21,0,.025),add(p,.12,.67+tint*.08,.1)],[179,167,73],1.02);
+      face([add(p,-.13,.02,0),add(p,.26,.03,.1),add(p,-.12,.63,-.11)],[128,147,62],1.05);
+     }
+    }
+   }
   }
   layer=1;
+  const road=[175-67*wet,154-61*wet,112-39*wet],track=[181-83*wet,158-68*wet,115-46*wet];
   const strip=(s,w,h)=>add(s.p,s.nx*w,h,s.nz*w);
   for(let i=1;i<shoulders.length;i++){
    const a=shoulders[i-1],b=shoulders[i];
    if(Math.hypot(a.p.x-cam.x,a.p.z-cam.z)>190)continue;
    face([strip(a,-4.72,.06),strip(a,4.72,.06),strip(b,4.72,.06),strip(b,-4.72,.06)],[142,132,94],1,-3);
-   face([strip(a,-3.56,.13),strip(a,3.56,.13),strip(b,3.56,.13),strip(b,-3.56,.13)],[175,154,112],.96+rand(i)*.07,-3.14);
+   face([strip(a,-3.56,.13),strip(a,3.56,.13),strip(b,3.56,.13),strip(b,-3.56,.13)],road,.96+rand(i)*.07,-3.14);
    for(const side of [-1,1]){
-    const left=side*1.55-.48,right=side*1.55+.48;
-    face([strip(a,left,.16),strip(a,right,.16),strip(b,right,.16),strip(b,left,.16)],[184,162,118],.98+rand(i+side)*.055,-3.23);
+    const left=side*1.55-.4,right=side*1.55+.4;
+    face([strip(a,left,.16),strip(a,right,.16),strip(b,right,.16),strip(b,left,.16)],track,.98+rand(i+side)*.045,-3.23);
+   }
+   if(wet>.18&&rand(i*11)>.72){
+    const side=rand(i*41)>.5?1:-1,mid=side*(.78+rand(i)*1.48),width=(.22+rand(i*3)*.76)*wet;
+    const puddle=[strip(a,mid-width*.57,.182),strip(a,mid+width*.40,.184),strip(b,mid+width,.183),
+     strip(b,mid-width*.68,.182),strip(a,mid-width,.182)];
+    face(puddle,[112,129,121],.93,-3.34);
    }
   }
   layer=2;
@@ -180,7 +268,7 @@ function attach(canvas){
     for(let i=0;i<rim.length;i++)face([rim[i],rim[(i+1)%rim.length],top],[123,124,107],.79+i*.095);
     continue;
    }
-   const breeze=reduced?0:Math.sin(seconds*2.7+p.seed*.54)*.13;
+   const breeze=reduced?0:Math.sin(seconds*2.7+p.seed*.54)*.21*gust;
    for(let i=-1;i<=1;i++){
     const h=p.size*(1-Math.abs(i)*.21),s=i*.23;
     const color=p.seed%5===0?[194,165,87]:[92,129,61];
@@ -190,6 +278,16 @@ function attach(canvas){
   for(const p of plants){
    const dx=p.x-cam.x,dz=p.z-cam.z, ahead=dx*fx+dz*fz;
    if(ahead<0||ahead>242||Math.abs(dx*rx+dz*rz)>32+ahead*.97)continue;
+   if(tree?.naturalWidth){
+    const [x,y,depth]=tr(p);
+    if(depth<near+2||depth>160)continue;
+    const height=p.size*1.33*focal/depth,width=height*(.63+p.shade*.098);
+    const left=W*.5+x*focal/depth-width*.5,top=horizon-y*focal/depth-height;
+    if(left>W||left+width<0||top>H)continue;
+    const sway=reduced?0:Math.sin(seconds*2+p.x+p.z)*.018*gust;
+    faces.push({sprite:tree,left,top,width,height,sway,flip:p.shade%2===1,opacity:1-cap((depth-62)/98,0,1),layer,depth});
+    continue;
+   }
    const t=p.size;box(p,t*.094,t*.64,t*.094,0,[109,85,60]);
    const canopy=[[64,105,63],[81,117,63],[94,129,70],[58,102,78]][p.shade];
    const broad=p.shade===1||p.shade===2;
@@ -202,18 +300,26 @@ function attach(canvas){
   }
   for(const p of houses){
    if(Math.hypot(p.x-cam.x,p.z-cam.z)>180)continue;
-   const w=p.w,yaw=.45;
-   box(p,w,w*.68,w*1.3,yaw,[223,195,145]);
+   const w=p.w,yaw=p.yaw;
+   const wall=[[224,194,146],[202,181,146],[187,163,135]][p.tint];
+   box(p,w,w*.68,w*1.3,yaw,wall);
    const turn=(x,y,z)=>add(p,x*Math.cos(yaw)+z*Math.sin(yaw),y,z*Math.cos(yaw)-x*Math.sin(yaw));
    const r=[turn(-w*.60,w*.68,-w*.73),turn(w*.60,w*.68,-w*.73),turn(w*.60,w*.68,w*.73),turn(-w*.60,w*.68,w*.73),turn(0,w*1.06,-w*.73),turn(0,w*1.06,w*.73)];
-   const roof=p.tint?[123,94,72]:[159,111,72];face([r[0],r[3],r[5],r[4]],roof,1.12);face([r[1],r[2],r[5],r[4]],roof,.86);face([r[0],r[1],r[4]],roof,.77);face([r[2],r[3],r[5]],roof,.8);
+   const roof=[[138,88,66],[94,101,90],[128,105,83]][p.tint];
+   face([r[0],r[3],r[5],r[4]],roof,1.12);face([r[1],r[2],r[5],r[4]],roof,.86);face([r[0],r[1],r[4]],roof,.77);face([r[2],r[3],r[5]],roof,.8);
    for(const side of [-1,1]){
     const z=side*w*.656;
     face([turn(-w*.13,0,z),turn(w*.13,0,z),turn(w*.13,w*.49,z),turn(-w*.13,w*.49,z)],[89,67,50],.96,-.15);
     for(const x of [-w*.31,w*.31]){
      const y=w*.38,half=w*.066;
-     face([turn(x-half,y-half,z),turn(x+half,y-half,z),turn(x+half,y+half,z),turn(x-half,y+half,z)],[70,99,94],1,-.15);
+     const glass=dark>.5?[241,186,96]:[70,99,94];
+     face([turn(x-half,y-half,z),turn(x+half,y-half,z),turn(x+half,y+half,z),turn(x-half,y+half,z)],glass,1,-.15);
     }
+   }
+   if(p.shop){
+    face([turn(-w*.55,w*.58,-w*.67),turn(w*.55,w*.58,-w*.67),turn(w*.61,w*.43,-w*.99),turn(-w*.61,w*.43,-w*.99)],
+     [[172,108,74],[101,141,111],[146,85,79]][p.tint],1.02,-.23);
+    for(const side of [-1,1])box(turn(side*w*.54,0,-w*.94),.10,w*.43,.10,yaw,[112,87,65],0,-.24);
    }
   }
   if(hazard&&hazard.at>=d-5&&hazard.at<d+165){
@@ -260,21 +366,91 @@ function attach(canvas){
     box(shift(pos,0,0,-.25),.33,.105,.44,heading,[58,63,51],.96,-1.5);
     box(shift(pos,0,0,.79),.69,.077,.074,heading,[75,81,65],1.11,-1.5);
    }
-   const pose=actor.pose({moving,mode,speed,actualSpeed,seconds,dt,action,actionTime,turn:steer,reduced});
-   WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),p=>shift(pos,...p.map(v=>v*.93)),pose,mode,damage);
+   const pose=actor.pose({moving,mode,speed,actualSpeed,seconds,dt,action,actionTime,turn:steer,reduced,trekking:true});
+   const grade=E.grade(route,d)*(backwards?-1:1);
+   const footing=mode==='walk'?.14:0;
+   WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),([x,y,z])=>shift(pos,x,y+footing+z*grade,z),pose,mode,damage);
+  }
+  if(companion&&mode==='walk'){
+   const trail=E.sample(route,d-(backwards?-3.4:3.4));
+   const companionPos=shift(trail,-2.1,.14,d<3.4?-1.6:0);
+   const pose=follower.pose({moving,speed,actualSpeed,seconds,dt,turn:steer*.4,reduced});
+   WindHiker.draw((p,c,light)=>face(p,c,light,-1.05),([x,y,z])=>shift(companionPos,x*.93,y*.93,z*.93),pose,'walk',false,companion);
+  }
+  for(const resident of residents){
+   const {x,z,angle,size,phase,rig,outfit}=resident;
+   const [lateral,,depth]=tr({x,z,h:cam.h});
+   if(depth<near||depth>60||Math.abs(lateral)>10+depth*.85)continue;
+   const speed=outfit==='child'?1.8:outfit==='elder'?.35:.63;
+   const step=phase+(reduced?0:seconds*speed*.35),stride=Math.cos(step),wave=Math.sin(step);
+   const walking=!reduced&&Math.abs(stride)*speed>.13;
+   const dx=Math.sin(angle)*wave*1.55,dz=Math.cos(angle)*wave*1.55;
+   const p={x:x+dx,z:z+dz,h:land(x+dx,z+dz)+.15};
+   const facing=angle+(stride<0?Math.PI:0);
+   const cos=Math.cos(facing),sin=Math.sin(facing);
+   const pose=rig.pose({moving:walking,speed:.86,actualSpeed:speed*7*Math.abs(stride),seconds:seconds+phase,dt,reduced});
+   WindHiker.draw((points,color,light)=>face(points,color,light,-.55),([u,v,w])=>{
+    const lean=outfit==='elder'?.08*Math.max(0,v-.8):0;
+    return add(p,(u*cos+(w+lean)*sin)*size,v*size,((w+lean)*cos-u*sin)*size);
+   },pose,'walk',false,outfit);
   }
   pets.forEach((name,i)=>{
-   const p=shift(pos,i%2?2.2:-2.2,0,-2.1-i*1.6),c=name==='dog'?[154,113,73]:[185,165,124];
-   box(p,.48,.37,.98,heading,c,.19,-4.1);box(shift(p,0,0,.50),.43,.43,.42,heading,c,.25,-4.15);
+   const dog=name==='dog',size=dog?1:.72,p=shift(pos,i%2?2.0:-2.0,0,-2.1-i*1.6);
+   const color=dog?[163,117,77]:[195,170,135];
+   const part=(x,y,z,w,h,l,c)=>box(shift(p,x*size,y*size,z*size),w*size,h*size,l*size,heading,c,0,-3.9);
+   part(0,.26,0,.41,.34,.77,color);
+   part(0,.44,.43,.36,.31,.40,color);
+   part(0,.43,.66,.22,.17,.23,dog?[106,77,55]:[132,110,88]);
+   for(const side of [-1,1]){
+    part(side*.128,.70,.39,.108,dog?.15:.20,.16,color);
+    for(const end of [-1,1]){
+     const stride=moving?Math.sin(seconds*12+i+side*end*1.6)*.095:0;
+     part(side*.134,Math.max(0,stride*.42),end*.25+stride,.1,.31,.13,color);
+    }
+   }
+   const tail=shift(p,0,.43*size,-.35*size),tip=shift(p,Math.sin(seconds*4)*.12,.77*size,-.72*size);
+   face([add(tail,-.06,0,0),add(tail,.06,.045,0),add(tip,.036,0,0),add(tip,-.036,0,0)],color,.9,-3.9);
   });
   faces.sort((a,b)=>a.layer-b.layer||b.depth-a.depth);
   for(const f of faces){
+   if(f.sprite){
+    ctx.save();ctx.globalAlpha=f.opacity;
+    ctx.translate(f.left+f.width*.5,f.top+f.height);
+    ctx.rotate(f.sway);
+    if(f.flip)ctx.scale(-1,1);
+    ctx.drawImage(f.sprite,-f.width*.5,-f.height,f.width,f.height);
+    ctx.restore();continue;
+   }
    ctx.beginPath();ctx.moveTo(...f.screen[0]);
    for(let i=1;i<f.screen.length;i++)ctx.lineTo(...f.screen[i]);
-   ctx.closePath();ctx.fillStyle=f.color;ctx.fill();ctx.strokeStyle=f.color;ctx.lineWidth=.53;ctx.stroke();
+   ctx.closePath();ctx.fillStyle=f.color;
+   if(f.opacity<1){
+    ctx.globalAlpha=f.opacity;ctx.fill();ctx.globalAlpha=1;
+   }else{
+    ctx.fill();
+    if(f.layer<=1.5){ctx.strokeStyle=f.color;ctx.lineWidth=.53;ctx.stroke();}
+   }
+  }
+  if(heat>.02){
+   ctx.fillStyle='rgba(248,195,101,'+heat*.13+')';ctx.fillRect(0,0,W,H);
+  }
+  if(dark>.02){
+   ctx.fillStyle='rgba(22,36,72,'+dark*.56+')';ctx.fillRect(0,0,W,H);
+  }
+  if(rain>.03){
+   ctx.fillStyle='rgba(63,86,103,'+rain*.29+')';ctx.fillRect(0,0,W,H);
+   if(!reduced){
+    ctx.beginPath();
+    for(let i=0;i<112;i++){
+     const t=seconds*(.65+rand(i+8)*.53),v=(rand(i*7)+t)%1,u=(rand(i*13)+t*.16)%1;
+     const x=u*W,y=v*H,len=9+rand(i*11)*25;
+     ctx.moveTo(x,y);ctx.lineTo(x-len*.31,y-len);
+    }
+    ctx.lineWidth=1;ctx.strokeStyle='rgba(226,240,242,'+rain*.55+')';ctx.stroke();
+   }
   }
  };
- return {render,reset:()=>{angle=null;camera=null;actorYaw=null;lastFrame=null;zoom=1;wheelAngle=0;backwards=false;actor.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;actorYaw=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;backwards=false;actor.reset();follower.reset();}};
 }
 return {attach,land};
 })();
