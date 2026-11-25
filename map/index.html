@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#12392e">
+<title>Đường Về Phía Gió · Bản đồ du mục</title><link rel="stylesheet" href="map.css"></head>
+<body><main>
+<header><div><div class="eyebrow">SỔ TAY DU MỤC / TẬP 01</div><h1>Đường Về Phía Gió</h1></div><a href="../ride.html">Bản 2D ↗</a></header>
+<div class="status" aria-label="Tình trạng chuyến đi">
+<div><span>MÁU</span><meter id="health" min="0" max="100"></meter></div><div><span>NO BỤNG</span><meter id="food" min="0" max="100"></meter></div><div><span>ĐỦ NƯỚC</span><meter id="water" min="0" max="100"></meter></div><div><span>THỂ LỰC</span><meter id="energy" min="0" max="100"></meter></div><div><span>VÍ TIỀN</span><b id="money"></b></div><div><span>GIỜ TRONG GAME</span><b id="clock"></b></div></div>
+<div class="layout">
+<section class="mapbox" aria-label="Bản đồ hành trình">
+<div class="map-top"><span class="eyebrow">CAO NGUYÊN ĐÁ · HÀ GIANG</span><span class="badge" id="mode">Đi bộ</span></div>
+<div id="viewport" tabindex="0" aria-label="Kéo để xem bản đồ, cuộn chuột để zoom">
+<div id="world"><svg id="terrain" viewBox="0 0 1400 1020" aria-hidden="true"></svg><div id="pins"></div><div id="marker" aria-label="Vị trí người chơi" role="img"></div></div>
+</div>
+<div class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
+<div class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
+</section>
+<aside><div class="card">
+<div class="eyebrow" id="place-tag">ĐIỂM DỪNG</div><h2 id="place"></h2>
+<p id="summary"></p><figure id="photo" hidden><img id="image" alt="" referrerpolicy="no-referrer"><figcaption id="credit"></figcaption></figure>
+<div class="actions" id="actions"></div>
+</div><div class="card notebook"><div class="eyebrow">TÚI ĐỒ &amp; NHẬT KÝ</div><div id="bag"></div><div id="mission"></div><p id="message" role="status"></p><details><summary>Các điểm trên tuyến</summary><div id="directory"></div></details><button id="reset" class="subtle">Bắt đầu lại</button></div></aside>
+</div>
+<footer>Kéo hoặc chụm hai ngón để xem đường. Chọn ghim, rồi bấm Đi tới đây. Tuyến và dịch vụ được rút gọn, hư cấu cho game. Ảnh có ghi tác giả và giấy phép.</footer>
+</main><script src="data.js"></script><script src="engine.js"></script><script src="map.js"></script></body></html>

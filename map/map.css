@@ -1,0 +1,31 @@
+*{box-sizing:border-box} :root{color:#263c30;background:#f4efdf;font:15px system-ui,sans-serif;--pine:#16483c;--paper:#fffaf0;--border:#c9c5a9}
+body{margin:0;background:radial-gradient(ellipse at 75% -20%,#cddbb9,#f4efdf 60%);min-height:100vh}
+main{max-width:1290px;margin:auto;padding:18px clamp(10px,3vw,30px)}
+header{display:flex;align-items:end;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 0 9px;gap:12px} header a{white-space:nowrap}
+h1,h2{font-family:Georgia,serif;line-height:1.06;margin:.2em 0}h1{font-size:clamp(1.55rem,4.3vw,3rem)}h2{font-size:clamp(1.65rem,3vw,2.25rem)}
+.eyebrow{color:#486354;font-size:.69rem;font-weight:850;letter-spacing:.12em}a{color:#18574a}
+.status{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:10px 0}
+.status>div{padding:7px 10px;background:#fff9e8;border:1px solid var(--border);border-radius:9px;display:flex;flex-direction:column;min-width:0}
+.status span{font-weight:800;color:#46604f;font-size:.62rem}.status meter{width:100%;height:16px;accent-color:#448776}.status b{font-size:.9rem;font-variant-numeric:tabular-nums}
+.layout{display:grid;grid-template-columns:2.1fr 1fr;gap:12px;align-items:start}
+.mapbox{position:relative;isolation:isolate;min-width:0;border:1px solid #7b9277;border-radius:15px;overflow:hidden;color:#193b30}
+#viewport{height:clamp(400px,64vh,680px);overflow:hidden;position:relative;background:#b4c5a3;touch-action:none;cursor:grab;user-select:none}
+#viewport:active{cursor:grabbing}#world{position:absolute;width:1400px;height:1020px;transform-origin:0 0}
+#terrain{position:absolute;inset:0;width:100%;height:100%}
+.map-top,.map-bottom{position:absolute;left:8px;right:8px;display:flex;justify-content:space-between;align-items:center;gap:6px;pointer-events:none}.map-top{top:9px}.map-bottom{bottom:6px;font-size:.69rem}
+.map-top>*,.map-bottom{background:#fcf7e8ed;border:1px solid #a5b199;border-radius:7px;padding:3px 6px}
+.badge{font-weight:800}.nav{position:absolute;right:9px;bottom:32px;display:grid;gap:4px}.nav button{font-size:1.22rem;min-width:39px;height:39px;padding:0}
+.pin{position:absolute;transform:translate(-50%,-50%) scale(var(--pin-scale,1));display:flex;align-items:center;gap:5px;padding:3px 6px;border:1px solid #476b58;border-radius:8px;background:#fffae9;white-space:nowrap;font-size:12px;font-weight:750;cursor:pointer}
+.pin[aria-pressed=true]{background:#16483c;color:#fff5d7;border-color:#fff3c4;z-index:2}.pin.visited .icon{background:#a3d4b4}.pin .icon{display:grid;place-items:center;width:22px;height:22px;background:#e4e9ca;border-radius:5px}
+#marker{position:absolute;z-index:3;pointer-events:none;transform:translate(-50%,-50%) scale(var(--pin-scale,1));font-size:17px;width:29px;height:29px;background:#f4ca75;border:2px solid #16483c;border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 5px #163f3260}
+.card{border:1px solid var(--border);border-radius:13px;background:var(--paper);padding:13px;margin-bottom:8px}p{margin:.6em 0;line-height:1.4}
+figure{margin:8px 0}figure img{display:block;width:100%;max-height:230px;object-fit:contain;background:#e1e5ce;border-radius:8px}figcaption{font-size:.7rem;line-height:1.35;margin-top:4px}
+button{font:inherit;color:var(--pine);background:#f1f2df;border:1px solid #9ba88c;border-radius:7px;min-height:34px;padding:4px 8px;cursor:pointer;font-weight:700}
+button:not(:disabled):hover{filter:brightness(.94)}:focus-visible{outline:3px solid #9c5722;outline-offset:2px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.actions button:first-child{background:var(--pine);color:#fff9e9;border-color:var(--pine)}button:disabled{opacity:.5;cursor:not-allowed}
+.notebook{font-size:.84rem}.notebook #message{border-left:3px solid #bd8a48;padding-left:6px}.notebook #mission{margin-top:6px;color:#416653;font-weight:750}
+#directory{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}summary{cursor:pointer}.subtle{margin-top:6px;font-size:.72rem;background:transparent}
+footer{font-size:.78rem;color:#4e6355}
+@media(max-width:770px){.layout{grid-template-columns:1fr}#viewport{height:clamp(310px,49vh,500px)}.status>div{padding:4px}.status span{font-size:.51rem}.status b{font-size:.73rem}}
+
+#health{accent-color:#b4523d}.pin.compact .pin-name{display:none} .pin.compact{padding:1px} .pin.compact .icon{width:19px;height:19px} #marker.hit{background:#c85e45;box-shadow:0 0 0 8px #da664c55} .action-explain{font-size:.81rem;color:#4c6452}
