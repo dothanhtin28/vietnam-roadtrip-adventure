@@ -502,6 +502,10 @@ function renderSocial(local){
  content.replaceChildren();
  function finish(message,animation,duration=2.4,guest=null){
   if(!message)return;
+  if(animation==='private'){
+   clearDrive();if(!in3d&&scene)setView(true);
+   $('private-scene').hidden=false;
+  }
   socialResponse=message;say(message);if(animation)animate(animation,duration,guest);save();render();
  }
  if(s.social.detained){
@@ -520,7 +524,7 @@ function renderSocial(local){
  profile.className='social-profile';portrait.src='assets/creator-'+id+'.webp';portrait.alt=creator.name;portrait.loading='lazy';
  description.append(dom('strong',creator.name+' · '+creator.role),dom('p',creator.handle+' · Thân thiết '+person.bond+'/100'),dom('p',creator.bio));
  if(creator.romance&&(!s.social.partner||s.social.partner===id)){
-  const status=s.social.partner===id?'Đang yêu':person.dates?'Đang tìm hiểu':'';
+  const status=s.social.partner===id?({engaged:'Đã đính hôn',married:'Đã kết hôn'}[s.social.union]??'Đang yêu'):person.dates?'Đang tìm hiểu':'';
   const detail=['Cảm tình '+person.affection+'/100',person.dates?person.dates+' buổi hẹn':'',status].filter(Boolean).join(' · ');
   const relationship=dom('p',detail);relationship.className='social-relationship';description.append(relationship);
  }
@@ -528,14 +532,17 @@ function renderSocial(local){
  const actions=dom('div');actions.className='social-actions';
  for(const [key,details] of Object.entries(S.actions)){
   if(!S.visible(s,id,key))continue;
-  const label=key==='outing'?spot.outing+' · '+details.cost+'k':details.label;
-  const romance=['flirt','date','confess'].includes(key);
-  const animation=romance?'romance':key==='clip'?'photo':key==='meal'?'meal':null;
-  const button=socialButton(label,()=>finish(S.interact(s,id,key),animation,romance?3.5:2.4,romance?id:null),!S.available(s,id,key,spot));
+  const label=key==='outing'?spot.outing+' · '+details.cost+'k':key==='breakup'&&s.social.union==='married'?'Ly hôn':details.label;
+  const romance=['flirt','date','confess','proposal','wedding'].includes(key);
+  const animation=key==='private'?'private':romance?'romance':key==='clip'?'photo':key==='meal'?'meal':null;
+  const button=socialButton(label,()=>finish(S.interact(s,id,key),animation,key==='private'?3.9:romance?3.5:2.4,romance?id:null),!S.available(s,id,key,spot));
   button.title=S.requirements(s,id,key);
   actions.append(button);
  }
- content.append(selector,profile,actions);
+ content.append(selector,profile);
+ if(S.visible(s,id,'private'))content.append(dom('p',creator.name+' muốn dành thời gian riêng tư cùng anh. Anh muốn ở lại không?'));
+ else if(s.social.partner===id&&s.social.planFamily)content.append(dom('p','Hai người đang mong có em bé.'));
+ content.append(actions);
  if(S.conflict(s,spot)){
   const incident=dom('div'),choices=dom('div');incident.className='social-incident';choices.className='social-actions';
   incident.append(dom('p','Hai khách cãi nhau vì chen hàng. Anh muốn xử lý thế nào?'));
@@ -543,6 +550,18 @@ function renderSocial(local){
    socialButton('Gây gổ',()=>{setAuto(false);finish(S.resolve(s,'fight'),'scuffle',1.35);}));
   incident.append(choices);content.append(incident);
  }
+}
+function renderFamily(){
+ const family=S.familyStatus(s),panel=$('family-panel');
+ panel.hidden=!family;
+ if(!family)return;
+ $('family-state').textContent=family.days?'Anh và '+family.name+' đang chờ đón em bé. Còn '+family.days+' ngày đến ngày dự sinh.':'Em bé của anh và '+family.name+' đã chào đời.';
+ const actions=$('family-actions');actions.replaceChildren();
+ if(travel||cast||s.social.detained||!places[s.at].services?.includes('rest'))return;
+ const key=family.days?'wait':'care',label=family.days?'Nghỉ đến ngày dự sinh':family.cared?'Đã chăm bé hôm nay':'Chăm em bé';
+ actions.append(socialButton(label,()=>{
+  const message=S.familyAction(s,key);if(message){say(message);save();render();}
+ },family.cared));
 }
 function render(){
  const p=places[selected],local=selected===s.at;
@@ -555,7 +574,7 @@ function render(){
  $('mission').textContent=s.photos.length===3?'Hoàn thành bộ ảnh Hà Giang!':'Bộ ảnh Hà Giang: '+s.photos.length+'/3';
  $('party').hidden=!party.length;$('party').textContent=party.length?'Đi cùng '+party.join(' · '):'';
  $('message').textContent=showText;marker.textContent=petIcons||modes[activeMode()].icon;marker.title=modes[activeMode()].name;
- pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);renderSocial(local);
+ pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);renderSocial(local);renderFamily();
  if(travel){route(travel.plan,travel.d);supplyActions();return;}
  position(...coords(places[s.at]));
  if(s.social.detained){route(null);return;}
@@ -633,8 +652,10 @@ function loop(ms){
  const dt=Math.min(.075,Math.max(0,(ms-(last||ms))/1000));last=ms;
  if(auto&&belowAutoThreshold()){setAuto(false);walkVelocity=0;steerPose=0;say('Đã dừng tự đi: có chỉ số dưới 30%. Dùng đồ tiếp tế trong túi.');}
  const manual=Number(pressing('forward'))-Number(pressing('back'));
- const bathing=ms<(activity?.until??0)&&(activity.kind==='bath'||activity.kind==='shower');
- const drive=in3d&&!cast&&!bathing?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
+ const privateScene=ms<(activity?.until??0)&&activity.kind==='private';
+ const busy=privateScene||ms<(activity?.until??0)&&(activity.kind==='bath'||activity.kind==='shower');
+ if($('private-scene').hidden===privateScene)$('private-scene').hidden=!privateScene;
+ const drive=in3d&&!cast&&!busy?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
  motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);

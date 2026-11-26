@@ -55,6 +55,17 @@ footer{font-size:.78rem;color:#4e6355}
 .encounter{grid-column:1/-1;margin:2px 0 0;font-size:.83rem;display:flex;align-items:center;gap:10px}
 .encounter img{border-radius:9px;object-fit:cover;flex:none}
 #scene-panel{height:clamp(400px,64vh,680px);position:relative;background:#a7bbb2}
+#private-scene{position:absolute;inset:0;z-index:4;overflow:hidden;display:grid;place-items:center;background:radial-gradient(ellipse at 35% 36%,#bc8759 0%,#785644 42%,#332b31 100%);animation:lodge-scene 3.9s both}
+.lodge-window{position:absolute;top:12%;left:20%;width:clamp(55px,15%,130px);height:38%;border:6px solid #553b35;border-radius:45% 45% 3px 3px;background:radial-gradient(circle at 66% 33%,#ffe3aa 0 12%,transparent 13%),linear-gradient(#4b646e,#7f8a80);box-shadow:0 0 30px #f0c99150}
+.lodge-bed{position:absolute;bottom:22%;width:clamp(180px,45%,390px);height:24%;border-radius:20px 20px 10px 10px;background:#caa284;box-shadow:0 13px 0 #47332a,0 24px 20px #21171780}
+.lodge-bed i{position:absolute;bottom:63%;left:27%;width:20%;aspect-ratio:1;border-radius:53% 50% 44% 49%;background:linear-gradient(155deg,#352921 0 45%,#d99770 46%);box-shadow:0 15px 0 -3px #9e6f4e;transform-origin:bottom;animation:lodge-left 3.9s both}
+.lodge-bed i:nth-child(2){left:53%;background:linear-gradient(205deg,#50302a 0 47%,#e3a77d 48%);box-shadow:0 15px 0 -3px #975f68;animation-name:lodge-right}
+.lodge-blanket{position:absolute;inset:23% 0 0;border-radius:35px 35px 9px 9px;background:repeating-linear-gradient(104deg,#bd794b 0 15%,#a96847 16% 18%,#bd794b 19% 30%);transform-origin:bottom;animation:lodge-blanket 3.9s both}
+@keyframes lodge-scene{0%,100%{opacity:0}10%,90%{opacity:1}}
+@keyframes lodge-left{0%,12%{transform:translateX(0)}37%,47%{transform:translateX(18%) rotate(13deg)}66%,100%{transform:translate(25%,70%) scale(.8)}}
+@keyframes lodge-right{0%,12%{transform:translateX(0)}37%,47%{transform:translateX(-18%) rotate(-13deg)}66%,100%{transform:translate(-25%,70%) scale(.8)}}
+@keyframes lodge-blanket{0%,46%{transform:scaleY(1)}63%{transform:scaleY(1.42)}69%,83%{transform:scaleY(1.32) skewX(1.5deg)}76%,90%{transform:scaleY(1.46) skewX(-1.5deg)}100%{transform:scaleY(1.35)}}
+@media(prefers-reduced-motion:reduce){#private-scene,.lodge-bed i,.lodge-blanket{animation:none}}
 #canvas3d{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
 #canvas3d:active{cursor:grabbing}
 #mini{position:absolute;right:7px;top:49px;width:clamp(88px,16%,145px);aspect-ratio:1.2;padding:3px;background:#f7f3dbeb;border-color:#8ba087;box-shadow:0 3px 10px #213d2840}

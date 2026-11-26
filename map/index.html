@@ -19,6 +19,7 @@
 </div>
 <div id="scene-panel" hidden>
 <canvas id="canvas3d" aria-label="Góc nhìn 3D: WASD hoặc phím mũi tên để đi, kéo ngang hoặc dọc để nhìn xung quanh" tabindex="0"></canvas>
+<div id="private-scene" hidden aria-hidden="true"><div class="lodge-window"></div><div class="lodge-bed"><i></i><i></i><div class="lodge-blanket"></div></div></div>
 <button id="mini" title="Mở bản đồ"><svg id="mini-route" viewBox="135 120 1125 800" role="img" aria-label="Vị trí trên cung đường"></svg></button>
 <div class="scene-controls"><button id="orbit-left" aria-label="Xoay camera trái">↶</button><button id="look-up" aria-label="Ngước nhìn bầu trời">↑</button><button id="orbit-reset" aria-label="Về góc nhìn sau lưng">◎</button><button id="look-down" aria-label="Nhìn xuống">↓</button><button id="orbit-right" aria-label="Xoay camera phải">↷</button></div>
 </div>
@@ -44,7 +45,9 @@
 <p id="social-banter"></p>
 <p id="social-response" role="status" hidden></p>
 <div id="social-content"></div>
-</details><div class="card">
+</details><div class="card" id="family-panel" hidden>
+<h2>Gia đình</h2><p id="family-state"></p><div id="family-actions" class="social-actions"></div>
+</div><div class="card">
 <div class="eyebrow" id="place-tag">ĐIỂM DỪNG</div><h2 id="place"></h2>
 <p id="summary"></p><figure id="photo" hidden><img id="image" alt="" referrerpolicy="no-referrer"><figcaption id="credit"></figcaption></figure>
 <div class="actions" id="actions"></div>
