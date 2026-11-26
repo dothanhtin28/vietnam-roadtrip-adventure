@@ -307,6 +307,23 @@ for(let day=0;day<5;day++)for(const hour of [450,725,1130]){
  }
 }
 assert(visitors.every(([id])=>scheduled.has(id)));
+for(const id of Object.keys(S.creators)){
+ const today=Array.from({length:1440},(_,minute)=>S.life(id,minute));
+ assert(today.every((stage,minute)=>stage.start<=minute&&minute<stage.end));
+ assert(today.some(stage=>stage.kind==='work'));
+ const final=today.at(-1),tomorrow=S.life(id,1440);
+ assert.equal(final.at,tomorrow.at,'Overnight position should carry forward into the next day');
+}
+const commuters=S.travelAt(620);
+assert(commuters.length>5);
+for(const {id,from,to,start,end} of commuters){
+ assert.notEqual(from,to);assert(start<=620&&620<end);
+ assert.equal(S.life(id,end).at,to);
+ assert.equal(S.stagePlace(S.life(id,620)),D.places[from].name+' → '+D.places[to].name);
+}
+const phoneLife=S.lifeProfile('an',1140);
+assert(phoneLife.recent.length>=2&&phoneLife.next.length>=1);
+assert(phoneLife.meetings.some(event=>event.with.includes('khoi')));
 assert(S.bathing({...E.fresh(),at:2}).length>0);
 const open=E.fresh();open.social=S.restore({partner:'an',contacts:{an:{bond:80,affection:80,dates:3},nhi:{bond:80,affection:80,dates:3}}});
 open.at=4;
@@ -404,4 +421,7 @@ act(/^Tắm ao/);tick(18);
 assert.equal(sceneFrame.action,'bath');assert.equal(sceneFrame.bathSite,'pond');
 assert.equal(get('clean').value,88);
 hold('w',24);assert.equal(sceneFrame.d,0);
+const still=sceneFrame.clock;tick(190);
+assert(sceneFrame.clock>still,'NPC time must pass while the player stands still');
+assert(sceneFrame.roadGuests.every(guest=>guest.from!==guest.to));
 console.log('OK: manual and auto travel, nearby pickup, U-turns, impact and dodge, actions, vehicles and saves.');

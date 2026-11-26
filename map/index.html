@@ -2,7 +2,7 @@
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#12392e">
 <title>Đường Về Phía Gió · Bản đồ du mục</title><link rel="stylesheet" href="map.css"></head>
 <body><main>
-<header><div><div class="eyebrow">SỔ TAY DU MỤC / TẬP 01</div><h1>Đường Về Phía Gió</h1></div><div class="header-actions"><a href="../ride.html">Bản 2D ↗</a><button id="music" type="button" aria-pressed="false">Bật nhạc nền</button><button id="fullscreen" type="button" aria-pressed="false">Toàn màn hình</button></div></header>
+<header><div><div class="eyebrow">SỔ TAY DU MỤC / TẬP 01</div><h1>Đường Về Phía Gió</h1></div><div class="header-actions"><a href="../ride.html">Bản 2D ↗</a><button id="open-phone" type="button" aria-haspopup="dialog" aria-keyshortcuts="P">Điện thoại</button><button id="music" type="button" aria-pressed="false">Bật nhạc nền</button><button id="fullscreen" type="button" aria-pressed="false">Toàn màn hình</button></div></header>
 <div class="status" aria-label="Tình trạng chuyến đi">
 <div><span>MÁU</span><meter id="health" min="0" max="100"></meter></div><div><span>NO BỤNG</span><meter id="food" min="0" max="100"></meter></div><div><span>ĐỦ NƯỚC</span><meter id="water" min="0" max="100"></meter></div><div><span>THỂ LỰC</span><meter id="energy" min="0" max="100"></meter></div><div><span>SẠCH SẼ</span><meter id="clean" min="0" max="100"></meter></div><div><span>VÍ TIỀN</span><b id="money"></b></div><div><span>GIỜ TRONG GAME</span><b id="clock"></b></div></div>
 <div class="layout">
@@ -54,4 +54,14 @@
 </div><div class="card notebook"><div class="eyebrow">TÚI ĐỒ &amp; NHẬT KÝ</div><div id="bag"></div><div id="mission"></div><p id="party" hidden></p><p id="message" role="status"></p><details id="contacts-book" hidden><summary id="contacts-title">Sổ liên lạc</summary><ul id="contacts-list"></ul></details><details><summary>Các điểm trên tuyến</summary><div id="directory"></div></details><button id="reset" class="subtle">Bắt đầu lại</button></div></aside>
 </div>
 <footer>Giữ WASD, phím mũi tên hoặc nút dưới cảnh 3D để tự di chuyển. Sơ đồ theo dõi vị trí trong game. Tuyến và dịch vụ được mô phỏng. Ảnh có ghi tác giả và giấy phép.</footer>
+<dialog id="phone-dialog" aria-labelledby="phone-title">
+<div class="phone-bar"><div><span id="phone-time"></span><h2 id="phone-title">Mạng lưới bạn đường</h2></div><button id="close-phone" type="button" aria-label="Đóng điện thoại">Đóng</button></div>
+<div class="phone-layout">
+<section class="phone-directory" aria-label="Danh bạ">
+<label for="phone-search">Tìm theo tên hoặc nghề</label><input type="search" id="phone-search" placeholder="Ví dụ An Mây" autocomplete="off">
+<div class="phone-filters"><button id="phone-all" type="button" aria-pressed="true">Mọi người</button><button id="phone-known" type="button" aria-pressed="false">Đã gặp</button></div>
+<p id="phone-count" aria-live="polite"></p><ul id="phone-people"></ul>
+</section>
+<section id="phone-profile" aria-label="Hồ sơ và hành trình"></section>
+</div></dialog>
 </main><script src="data.js"></script><script src="engine.js"></script><script src="social.js"></script><script src="hiker3d.js"></script><script src="scene3d.js"></script><script src="music.js"></script><script src="map.js"></script></body></html>

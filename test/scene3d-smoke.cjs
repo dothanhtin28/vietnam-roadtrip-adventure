@@ -93,5 +93,9 @@ scene.render({route:E.profile(4,5),d:0,action:'shower',actionTime:1.5,seconds:5.
 vm.runInContext(fs.readFileSync(path.join(root,'social.js'),'utf8'),c);
 scene.render({route:E.profile(0,1),d:0,socialGuests:['an','khoi'],romanceGuest:'an',action:'romance',actionTime:1.5,actionDuration:3.5,seconds:6});
 scene.render({route:E.profile(2,3),d:0,bathSite:'pond',socialGuests:['local-1','guest-2','yenchi'],shoreVisitors:['local-2','local-9'],seconds:6.1});
+const afternoon=620,commuters=c.TripSocial.travelAt(afternoon);
+scene.reset();
+scene.render({route:E.profile(0,8),d:450,roadGuests:commuters,clock:afternoon,seconds:6.2});
+scene.render({route:E.profile(0,8),d:450,roadGuests:commuters,clock:afternoon+.6,seconds:6.3});
 
 console.log('OK: 3D geometry and all vehicle modes; uphill/downhill, hunger, thirst, energy, health, damage and ETA.');

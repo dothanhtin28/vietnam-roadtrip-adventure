@@ -186,8 +186,10 @@ function lookAtRiver(){
 const canvas=$('canvas3d');
 function drivingKey(e){return inputs[e.key.length===1?e.key.toLowerCase():e.key];}
 window.addEventListener('keydown',e=>{
- if(!in3d||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
+ if($('phone-dialog').open||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
  const key=e.key.toLowerCase();
+ if(key==='p'&&!e.repeat){e.preventDefault();openPhone();return;}
+ if(!in3d)return;
  if(key==='e'||key==='q'){
   e.preventDefault();
   if(!e.repeat){if(key==='e')tryPickup();else turnAround();}
@@ -243,6 +245,7 @@ function updateStats(){
  }else{$('pace-speed').textContent=jump?'Đang nhảy':'Đang dừng';$('pace-grade').textContent='';$('pace-shape').textContent='';$('pace-distance').textContent='';meters(s);}
 }
 let miniCourse=null;
+let travelerMinute=-1,roadGuests=[];
 function drawScene(ms){
  if(!in3d||ms-lastDraw<(reduced?30:14))return;
  lastDraw=ms;
@@ -252,7 +255,9 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,shoreVisitors,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ const clock=gameClock(),minute=Math.floor(clock);
+ if(minute!==travelerMinute){travelerMinute=minute;roadGuests=S.travelAt(minute);}
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,roadGuests,shoreVisitors,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock,weather:E.weather(clock),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,romanceGuest:ms<(activity?.until??0)?activity.guest:null,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -570,6 +575,69 @@ function renderContacts(){
   list.append(row);
  }
 }
+const phone=$('phone-dialog');
+const searchable=value=>value.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().replaceAll('đ','d');
+const phonePeople=Object.entries(S.creators).sort(([,a],[,b])=>a.name.localeCompare(b.name,'vi')).map(([id,person])=>({id,person,search:searchable([person.name,person.role,person.handle].filter(Boolean).join(' '))}));
+let phonePerson='an',phoneKnown=false,phoneStage='';
+function timeLabel(clock){return 'Ngày '+E.day({clock})+' · '+E.time(Math.floor(clock));}
+function renderPhoneList(){
+ const query=searchable($('phone-search').value??'').trim(),list=$('phone-people');
+ const matches=phonePeople.filter(({id,search})=>(!phoneKnown||S.contact(s,id).bond>0)&&search.includes(query));
+ if(!matches.some(({id})=>id===phonePerson))phonePerson=matches[0]?.id??null;
+ $('phone-count').textContent=matches.length?matches.length+' người':phoneKnown&&!query?'Anh chưa làm quen với ai.':'Không tìm thấy người phù hợp.';
+ list.replaceChildren();
+ for(const {id,person} of matches){
+  const row=dom('li'),button=socialButton(person.name,()=>{
+   phonePerson=id;for(const item of list.children)item.firstElementChild.setAttribute('aria-pressed',String(item.firstElementChild===button));
+   renderPhoneProfile(true);
+  });
+  button.setAttribute('aria-pressed',String(id===phonePerson));row.append(button);list.append(row);
+ }
+ renderPhoneProfile(true);
+}
+function renderPhoneProfile(force=false){
+ const clock=Math.floor(gameClock()),profile=$('phone-profile');
+ $('phone-time').textContent=timeLabel(clock);
+ if(!phonePerson){profile.replaceChildren();return;}
+ const person=S.creators[phonePerson],stage=S.life(phonePerson,clock),key=phonePerson+' '+Math.floor(clock/15)+' '+stage.start;
+ if(!force&&phoneStage===key)return;
+ phoneStage=key;
+ const life=S.lifeProfile(phonePerson,clock),connection=S.contact(s,phonePerson);
+ const head=dom('div'),portrait=dom('img'),info=dom('div');
+ head.className='phone-person';portrait.src='assets/creator-'+(person.asset??phonePerson)+'.webp';portrait.alt='';
+ if(person.colorShift)portrait.style.filter='hue-rotate('+person.colorShift+'deg)';
+ info.append(dom('h3',person.name),dom('p',[person.role,person.handle,relationshipNames[connection.relationship]].filter(Boolean).join(' · ')),dom('p',person.bio));
+ head.append(portrait,info);
+ const current=dom('div');current.className='phone-now';
+ current.append(dom('strong',life.current.label),dom('p',life.place));
+ if(life.nearby.length)current.append(dom('p','Có mặt cùng '+life.nearby.map(id=>S.creators[id].name).join(', ')));
+ const stop=life.current.at??life.current.to;
+ current.append(socialButton('Xem điểm dừng trên sơ đồ',()=>{
+  phone.close();setView(false);select(stop);center(coords(places[stop]));
+ }));
+ profile.replaceChildren(head,current);
+ const timeline=(title,rows,description,when)=>{
+  if(!rows.length)return;
+  const section=dom('section'),list=dom('ul');section.className='phone-timeline';section.append(dom('h4',title),list);
+  for(const part of rows){const row=dom('li');row.append(dom('time',timeLabel(when(part))),dom('span',description(part)));list.append(row);}
+  profile.append(section);
+ };
+ const entry=part=>part.label+' · '+S.stagePlace(part);
+ timeline('Sắp tới',life.next,entry,part=>part.start);
+ timeline('Đã gặp gỡ',life.meetings,part=>part.label+' với '+part.with.map(id=>S.creators[id].name).join(', ')+' · '+places[part.at].name,part=>part.time);
+ timeline('Nhật ký gần đây',life.recent,entry,part=>part.start);
+}
+function openPhone(){
+ if(phone.open)return;
+ clearDrive();renderPhoneList();phone.showModal();$('close-phone').focus();
+}
+$('open-phone').onclick=openPhone;
+$('close-phone').onclick=()=>phone.close();
+phone.addEventListener('close',()=>$('open-phone').focus());
+$('phone-search').addEventListener('input',renderPhoneList);
+for(const [id,known] of [['phone-all',false],['phone-known',true]])$(id).onclick=()=>{
+ phoneKnown=known;$('phone-all').setAttribute('aria-pressed',String(!known));$('phone-known').setAttribute('aria-pressed',String(known));renderPhoneList();
+};
 function renderFamily(){
  const family=S.familyStatus(s),panel=$('family-panel');
  panel.hidden=!family;
@@ -581,6 +649,25 @@ function renderFamily(){
  actions.append(socialButton(label,()=>{
   const message=S.familyAction(s,key);if(message){say(message);save();render();}
  },family.cared));
+}
+let idleElapsed=0,lastSocietyMinute=-1,lastSocialView='';
+function advanceSociety(dt){
+ if(!motion&&!jump){
+  idleElapsed+=dt;
+  if(idleElapsed>=2.4){
+   idleElapsed-=2.4;
+   if(travel)travel.roadMinutes+=1;
+   else{s.clock+=1;save();}
+  }
+ }
+ const minute=Math.floor(gameClock());
+ if(minute===lastSocietyMinute)return;
+ lastSocietyMinute=minute;
+ if(phone.open)renderPhoneProfile();
+ if(travel||cast)return;
+ const spot=S.venue(s),day=E.day(s),swimmers=S.bathing(s);
+ const view=[s.at,day,s.social.detained,spot?.guests.join(','),swimmers.join(','),Math.floor(minute/16)].join('/');
+ if(view!==lastSocialView){lastSocialView=view;renderSocial(selected===s.at);renderContacts();renderFamily();}
 }
 function render(){
  const p=places[selected],local=selected===s.at;
@@ -674,7 +761,7 @@ function loop(ms){
  const privateScene=ms<(activity?.until??0)&&activity.kind==='private';
  const busy=privateScene||ms<(activity?.until??0)&&(activity.kind==='bath'||activity.kind==='shower');
  if($('private-scene').hidden===privateScene)$('private-scene').hidden=!privateScene;
- const drive=in3d&&!cast&&!busy?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
+ const drive=in3d&&!cast&&!busy&&!phone.open?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
  motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);
@@ -761,6 +848,7 @@ function loop(ms){
   if(age>=2450){cast=null;say(E.catchFish(s,Infinity));save();render();}
   else if(age>=1250&&!cast.phase){cast.phase=1;say('● Phao chìm! Bấm Giật cần ngay.');}
  }
+ advanceSociety(dt);
  if(ms-(lastStats||0)>90){updateStats();lastStats=ms;}
  drawScene(ms);
  requestAnimationFrame(loop);

@@ -169,6 +169,8 @@ function attach(canvas){
  let angle=null,camera=null,cameraLook=null,lastFrame=null,actorYaw=null,actorPosition=null,yawVelocity=0,zoom=1,wheelAngle=0,wet=null,rain=null,heat=null,dark=null;
  let densityScale=1,frameAverage=.025,qualityCheck=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
+ const npcRoutes=new Map(),npcRigs=new Map();
+ let npcClock=null;
  const image=src=>{
   if(typeof Image==='undefined')return null;
   const bitmap=new Image();bitmap.src=src;return bitmap;
@@ -182,9 +184,10 @@ function attach(canvas){
  const heroImages=Object.fromEntries(['shell','canvas','leather','cordura'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,shoreVisitors=[],romanceGuest=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,roadGuests=[],shoreVisitors=[],romanceGuest=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
   const frameGap=lastFrame===null?.033:seconds-lastFrame,dt=cap(frameGap,0,.08);lastFrame=seconds;
+  npcClock=npcClock===null||Math.abs(clock-npcClock)>8?clock:mix(npcClock,clock,1-Math.exp(-dt*5));
   if(frameGap>0&&frameGap<.18)frameAverage=mix(frameAverage,frameGap,.09);
   if(qualityCheck===null)qualityCheck=seconds;
   if(!clothingPreview&&seconds-qualityCheck>.7){
@@ -744,25 +747,52 @@ function attach(canvas){
     return add(p,(u*cos+(w+lean)*sin)*size,v*size,((w+lean)*cos-u*sin)*size);
    },pose,'walk',false,outfit);
   }
+  const society=globalThis.TripSocial;
+  let walkers=0;
+  for(const {id,from,to,start,end} of roadGuests){
+   const key=from+':'+to;
+   if(!npcRoutes.has(key))npcRoutes.set(key,E.profile(from,to));
+   const path=npcRoutes.get(key),length=path.at(-1).d;
+   const seed=Array.from(id).reduce((sum,char)=>sum+char.charCodeAt(0),0);
+   const distance=length*cap((npcClock-start)/(end-start),0,1),p=E.roadPoint(path,distance,2.35+rand(seed)*.55);
+   const [x,y,z]=tr(add(p,0,2.78,0));
+   if(z<=near||z>52||Math.abs(x)>8+z*.85||walkers>=5)continue;
+   walkers++;
+   const ahead=E.sample(path,distance+1),behind=E.sample(path,distance-1);
+   const yaw=Math.atan2(ahead.x-behind.x,ahead.z-behind.z),cs=Math.cos(yaw),sn=Math.sin(yaw),guest=society.creators[id];
+   if(z<27&&walkers<=2){
+    if(!npcRigs.has(id))npcRigs.set(id,WindHiker.create(seed));
+    const pace=1.58+(rand(seed)*.44),size=.92+rand(seed+2)*.12;
+    const pose=npcRigs.get(id).pose({moving:!reduced,actualSpeed:pace,seconds,dt,reduced});
+    const outfit=guest.gender==='female'?['fern','plum','azure','gold'][seed%4]:seed%2?'indigo':'trailMan';
+    WindHiker.draw((points,paint,light)=>face(points,paint,light,-.55),([u,v,w])=>add(p,(u*cs+w*sn)*size,v*size+.14,(w*cs-u*sn)*size),pose,'walk',false,outfit);
+   }else billboard(creatorImages[guest.asset??id],p,2.45,{sway:reduced?0:Math.sin(seconds*7+seed)*.035,flip:Math.sin(yaw-angle)<0,colorShift:guest.colorShift});
+   if(ctx.fillText)faces.push({label:guest.name,x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
+  }
   if(socialGuests?.length){
    const speaking=Math.floor(seconds/4)%socialGuests.length;
    const sn=Math.sin(direction),cs=Math.cos(direction);
    for(const [i,id] of socialGuests.entries()){
-    const guest=globalThis.TripSocial.creators[id],responding=courting&&id===romanceGuest;
+    const guest=society.creators[id],responding=courting&&id===romanceGuest,task=society.life(id,clock);
     const nearGuest=responding?approach:0;
     const seed=Array.from(id).reduce((sum,char)=>sum+char.charCodeAt(0),0);
     const walk=reduced?0:seconds*(.24+rand(seed)*.13)+seed;
-    const busy=!reduced&&Math.sin(walk*.57+i)>-.32;
+    const pace=task.kind==='rest'?.18:task.kind==='social'?.55:1.12;
+    const busy=!reduced&&pace>.5&&Math.sin(walk*.57+i)>-.32;
     const headingSign=i%2?-1:1;
-    const side=mix(headingSign*(4.95+.7*Math.floor(i/2)+1.15*Math.sin(walk)),1.95,nearGuest);
-    const ahead=mix(7.35+4.15*Math.floor(i/2)+1.2*Math.sin(walk*.64),2.75,nearGuest);
+    const chat=task.kind==='social'&&socialGuests.length>1&&!courting&&i<3;
+    const gathering=chat?(reduced?1:smooth(cap((clock-task.start)/14,0,1))):0;
+    const patrolSide=headingSign*(4.95+.7*Math.floor(i/2)+pace*Math.sin(walk));
+    const patrolAhead=7.35+4.15*Math.floor(i/2)+pace*2.7*Math.sin(walk*.64);
+    const side=mix(mix(patrolSide,-6.6+i*.95,gathering),1.95,nearGuest);
+    const ahead=mix(mix(patrolAhead,10.3+i*.78,gathering),2.75,nearGuest);
     const p=add(base,side*cs+ahead*sn,0,ahead*cs-side*sn);
     p.h=land(p.x,p.z)+.12;
     const talking=courting?responding:speaking===i;
     const sway=reduced?0:Math.sin(seconds*(busy&&!responding?7:3)+seed)*(busy?.043:talking?.028:.01);
     if(busy&&!responding)p.h+=Math.abs(Math.sin(seconds*6+seed))*.055;
     const portrait=creatorImages[guest.asset??id];
-    billboard(portrait,p,2.43+rand(seed*2)*.21,{sway,flip:responding||Math.cos(walk)*headingSign<0,colorShift:guest.colorShift});
+    billboard(portrait,p,2.43+rand(seed*2)*.21,{sway,flip:responding||(gathering>.5?i===0:Math.cos(walk)*headingSign<0),colorShift:guest.colorShift});
     if(!portrait?.naturalWidth||!ctx.fillText)continue;
     const [x,y,z]=tr(add(p,0,2.91,0));
     if(z<=near||z>35)continue;
@@ -880,7 +910,7 @@ function attach(canvas){
    ctx.fillText(caption,W*.5,top+18);
   }
  };
- return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;actor.reset();follower.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;npcClock=null;npcRigs.clear();actor.reset();follower.reset();}};
 }
 return {attach,land};
 })();

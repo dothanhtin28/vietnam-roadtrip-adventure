@@ -12,6 +12,7 @@ globalThis.WindHiker=(()=>{
  const outfits={
   fern:{jacket:[105,131,75],light:[151,171,100],green:[169,110,70],greenDark:[110,75,57]},
   indigo:{jacket:[65,100,150],light:[109,144,183],green:[151,120,68],greenDark:[104,82,54]},
+  trailMan:{jacket:[131,95,67],light:[177,131,93],pants:[57,67,70],green:[112,129,128],greenDark:[64,79,82]},
   plum:{jacket:[143,85,120],light:[181,124,154],green:[107,128,79],greenDark:[75,93,60]},
   azure:{jacket:[63,104,143],light:[102,146,179],green:[127,77,75],greenDark:[81,55,55]},
   gold:{jacket:[151,127,60],light:[185,159,99],green:[86,104,83],greenDark:[55,74,60]},

@@ -130,19 +130,91 @@ globalThis.TripSocial=(()=>{
   const visit=Math.floor(person.visit/destinations.length);
   return day%cycleDays===Math.floor(visit/hours.length)&&period===visit%hours.length?destinations[person.visit%destinations.length]:null;
  }
+ const placeIndex=new Map(D.places.map((place,index)=>[place.id,index]));
+ const identities=Object.keys(creators), plansByDay=new Map();
+ const workByRole=[[/ảnh|phim|video/iu,'Đi tìm góc quay và chụp cảnh'],[/ẩm thực|món bản|cà phê/iu,'Ghé quán thử món và ghi chép'],[/đạp xe|xe đạp/iu,'Kiểm tra xe và khảo sát đường'],[/dã ngoại/iu,'Thử đồ dã ngoại'],[/hóa|thủ công/iu,'Ghi chép chuyện trong bản'],[/nhạc/iu,'Tập đàn và thu âm']];
+ function itineraryStop(id,day,period){
+  const person=creators[id],publicStop=where(id,day*1440+hours[period]);
+  if(publicStop)return {at:placeIndex.get(publicStop),public:true};
+  const home=person.home??destinations[person.visit%destinations.length],index=placeIndex.get(home);
+  const side=(day+person.age)%2?1:-1;
+  return {at:period===1?limit(index+side,0,destinations.length-1):index,public:false};
+ }
+ function itinerary(id,day){
+  let schedules=plansByDay.get(day);
+  if(!schedules){
+   if(plansByDay.size>=8)plansByDay.delete(plansByDay.keys().next().value);
+   schedules=new Map();plansByDay.set(day,schedules);
+  }
+  if(schedules.has(id))return schedules.get(id);
+  const person=creators[id],dayStart=day*1440,lastNight=itineraryStop(id,Math.max(0,day-1),2).at;
+  const slots=hours.map((hour,period)=>({...itineraryStop(id,day,period),hour}));
+  const rain=E.weather(dayStart+785).kind==='rain',variation=(day+(person.age??27))%3;
+  const tasks=person.home?[person.role,'Nghỉ ăn và ghé chợ','Về bản gặp hàng xóm']:
+   [workByRole.find(([pattern])=>pattern.test(person.role))?.[1]??'Khảo sát điểm dừng',rain&&variation===0?'Trú mưa và sắp lại đồ':'Ăn trưa và trao đổi với khách qua đường',variation?'Chỉnh ảnh và đăng nhật ký chuyến đi':'Ăn tối cùng bạn đường'];
+  const segments=[];
+  const append=(from,until,data)=>{if(until>from)segments.push({start:dayStart+from,end:dayStart+until,...data});};
+  const tripMinutes=(a,b)=>a===b?0:28+Math.abs(b-a)*31;
+  const firstDeparture=slots[0].hour-tripMinutes(lastNight,slots[0].at);
+  append(0,firstDeparture,{at:lastNight,kind:'rest',label:'Nghỉ qua đêm'});
+  append(firstDeparture,slots[0].hour,{from:lastNight,to:slots[0].at,kind:'travel',label:'Đang đi đường'});
+  for(const [period,slot] of slots.entries()){
+   const next=slots[period+1],departure=next?next.hour-tripMinutes(slot.at,next.at):1260;
+   const midpoint=slot.hour+Math.floor((departure-slot.hour)*.6);
+   append(slot.hour,midpoint,{at:slot.at,public:slot.public,kind:period===0?'work':'social',label:tasks[period]});
+   const downtime=period===0?'Đi dạo quanh điểm dừng':period===1?'Nghỉ chân sau bữa trưa':'Thu dọn đồ và nghỉ ngơi';
+   append(midpoint,departure,{at:slot.at,public:slot.public,kind:period===0?'walk':'rest',label:downtime});
+   if(next)append(departure,next.hour,{from:slot.at,to:next.at,kind:'travel',label:'Đang đi đường'});
+   else append(departure,1440,{at:slot.at,kind:'rest',label:'Nghỉ qua đêm'});
+  }
+  schedules.set(id,segments);return segments;
+ }
+ function life(id,clock){
+  const day=Math.max(0,Math.floor(clock/1440));
+  return itinerary(id,day).find(segment=>clock<segment.end);
+ }
+ function travelAt(clock){
+  return identities.flatMap(id=>{
+   const stage=life(id,clock);
+   return stage.kind==='travel'?[{id,...stage}]:[];
+  });
+ }
+ const stagePlace=stage=>stage.kind==='travel'?D.places[stage.from].name+' → '+D.places[stage.to].name:D.places[stage.at].name;
+ function publicNeighbors(id,at,start){
+  if(at===undefined)return [];
+  const swimmers=bathing({at,clock:start});
+  if(swimmers.includes(id))return [];
+  return identities.filter(other=>{const stage=life(other,start);return id!==other&&stage.public&&stage.at===at&&!swimmers.includes(other);});
+ }
+ function lifeProfile(id,clock){
+  const day=Math.floor(clock/1440),today=itinerary(id,day),current=life(id,clock);
+  const recent=[...(day>0?itinerary(id,day-1):[]),...today].filter(part=>part.end<=clock&&part.kind!=='rest').slice(-4).reverse();
+  const next=[...today,...itinerary(id,day+1)].filter(part=>part.start>=current.end&&part.kind!=='rest').slice(0,3);
+  const nearby=current.public?publicNeighbors(id,current.at,clock).slice(0,4):[];
+  const meetings=[];
+  for(let offset=Math.max(0,day-2);offset<=day;offset++)for(const hour of [495,785,1100]){
+   const time=offset*1440+hour;
+   if(time>clock)continue;
+   const stage=life(id,time);
+   if(!stage.public)continue;
+   const group=publicNeighbors(id,stage.at,time);
+   if(group.length)meetings.unshift({time,at:stage.at,with:group.slice(0,2),label:hour===495?'Trò chuyện và chụp ảnh':hour===785?'Ăn trưa cùng nhau':'Góp chuyện và dựng clip'});
+  }
+  return {current,recent,next,nearby,meetings:meetings.slice(0,3),place:stagePlace(current)};
+ }
  function bathing(s){
   const id=D.places[s.at].id,minute=s.clock%1440,day=dayOf(s);
   if(!['river','dog'].includes(id)||!((minute>=360&&minute<510)||(minute>=1020&&minute<1140)))return [];
   if((day*7+(id==='river'?0:4)+(minute<510?0:2))%11>=3)return [];
-  return Object.keys(creators).filter(key=>creators[key].home===id&&where(key,s.clock)===id).slice(0,1+(day%2));
+  return identities.filter(key=>creators[key].home===id&&life(key,s.clock).at===placeIndex.get(id)).slice(0,1+(day%2));
  }
  function appearance(s,id){
-  const here=where(id,s.clock);
-  if(here)return venues[here].name;
+  const now=life(id,s.clock);
+  if(now.public)return venues[D.places[now.at].id].name;
   const today=Math.floor(s.clock/1440);
   for(let offset=0;offset<=cycleDays;offset++)for(const hour of hours){
-   const clock=(today+offset)*1440+hour,place=where(id,clock);
-   if(clock>s.clock&&place)return venues[place].name+' · ngày '+dayOf({clock})+' lúc '+E.time(clock);
+   const clock=(today+offset)*1440+hour,stage=life(id,clock);
+   if(clock>s.clock&&stage.public)return venues[D.places[stage.at].id].name+' · ngày '+dayOf({clock})+' lúc '+E.time(clock);
   }
   return '';
  }
@@ -150,7 +222,7 @@ globalThis.TripSocial=(()=>{
   const id=D.places[s.at].id;
   if(!owns(venues,id))return null;
   const swimmers=bathing(s);
-  const guests=Object.keys(creators).filter(key=>where(key,s.clock)===id&&!swimmers.includes(key));
+  const guests=identities.filter(key=>{const stage=life(key,s.clock);return stage.public&&stage.at===s.at&&!swimmers.includes(key);});
   return {...venues[id],id,guests};
  }
  const contact=(s,id)=>s.social.contacts[id]??{bond:0,done:{},affection:0,dates:0,relationship:null,open:false,planFamily:false,privateDay:0};
@@ -310,5 +382,5 @@ globalThis.TripSocial=(()=>{
   s.money-=fee;s.clock+=100;s.social.detained=null;
   return 'Đã giải quyết ở trạm'+(fee?' · −'+fee+'k':'')+'. Anh có thể tiếp tục chuyến đi.';
  }
- return {creators,actions,restore,venue,appearance,bathing,contact,banter,visible,requirements,available,interact,familyStatus,familyAction,conflict,resolve,settle};
+ return {creators,actions,restore,venue,appearance,bathing,life,lifeProfile,stagePlace,travelAt,contact,banter,visible,requirements,available,interact,familyStatus,familyAction,conflict,resolve,settle};
 })();
