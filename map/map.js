@@ -1,8 +1,9 @@
 (() => {
 'use strict';
-const {places,roads,modes,companions,petPrices,riverPath,cartFare,energyDrinkPrice,forage,clothing}=TripData,E=TripEngine,key='wind-trip-map-v1';
+const {places,roads,modes,companions,petPrices,riverPath,cartFare,energyDrinkPrice,forage,clothing}=TripData,E=TripEngine,S=TripSocial,key='wind-trip-map-v1';
 const $=id=>document.getElementById(id),vp=$('viewport'),world=$('world'),marker=$('marker');
 const dom=(tag,text='')=>{const e=document.createElement(tag);e.textContent=text;return e;};
+function newState(){return {...E.fresh(),social:S.restore()};}
 function load(){
  try{
   const s=JSON.parse(localStorage.getItem(key));
@@ -13,11 +14,12 @@ function load(){
    s.foraged=s.foraged&&typeof s.foraged==='object'&&!Array.isArray(s.foraged)?s.foraged:{};
    s.boostUntil=Number.isFinite(s.boostUntil)?s.boostUntil:0;
    s.wardrobe=E.wardrobe(s.wardrobe);
+   s.social=S.restore(s.social);
    s.campAt=s.campAt===s.at&&E.canCamp(s)?s.at:null;
    return s;
   }
  }catch{}
- return E.fresh();
+ return newState();
 }
 let s=load(),selected=s.at, travel=null, cast=null, last=0, hit=0, scale=1, tx=0,ty=0, initialized=false;
 $('wardrobe').open=s.at===0;
@@ -26,6 +28,7 @@ const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
 let in3d=false,geographic=false,orbit=0,look=0,viewpoint=false,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
 let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
 let openHost=null,auto=false;
+let socialGuest=null,socialScene=null,socialResponse='';
 let clothingPreview=false;
 const jumpDuration=.86;
 const worldUnitsPerKmh=.44;
@@ -49,6 +52,7 @@ function belowAutoThreshold(){
 }
 $('auto-walk').onclick=()=>{
  if(!in3d||cast)return;
+ if(!auto&&s.social.detained){say('Giải quyết ở trạm trước khi đi tiếp.');return;}
  if(!auto&&s.campAt===s.at){say('Thu lều trước khi lên đường.');return;}
  if(!auto&&belowAutoThreshold()){say('Tiếp tế để các chỉ số đạt ít nhất 30% rồi bật Tự đi.');return;}
  setAuto(!auto);
@@ -245,7 +249,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,detained:Boolean(s.social.detained),offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -364,6 +368,11 @@ function supplyActions(){
 }
 function travelStart(direction,mode=s.mode){
  const to=s.at+direction;if(!places[to]||travel||cast)return;
+ if(s.social.detained){
+  setAuto(false);
+  if(blocked!=='detained'){blocked='detained';say('Giải quyết ở trạm trước khi đi tiếp.');}
+  return;
+ }
  if(s.campAt===s.at){if(!blocked){blocked='camp';say('Thu lều trước khi lên đường.');}return;}
  const plan=E.trip(s.at,to,mode);
  if(!E.canTravel(s,plan)){
@@ -376,7 +385,7 @@ function travelStart(direction,mode=s.mode){
  }
  const pickup=E.forageSpot(s,s.at,to,plan.distance);
  if(pickup)pickup.position=E.roadPoint(plan.profile,pickup.at,plan.footOnly?.85:2.4);
- blocked='';activity=null;openHost=null;travel={to,plan,d:0,direction,heading:1,facing:1,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup};
+ blocked='';activity=null;openHost=null;socialResponse='';travel={to,plan,d:0,direction,heading:1,facing:1,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup};
  selected=s.at;orbit=0;look=0;viewpoint=false;clothingPreview=false;aside=0;
  say(mode==='cart'?'Xe bò đã sẵn sàng. Giữ W hoặc ▲ để đi, trả tiền khi tới nơi.':'Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
 }
@@ -456,6 +465,58 @@ function renderWardrobe(local){
   row.append(swatch,dom('strong',outfit.name),button);options.append(row);
  }
 }
+function socialButton(text,click,disabled=false){
+ const button=dom('button',text);button.type='button';button.disabled=disabled;button.onclick=click;
+ return button;
+}
+function renderSocial(local){
+ const panel=$('social-panel'),spot=S.venue(s),content=$('social-content');
+ socialScene=spot&&!travel&&!cast&&!s.social.detained?spot.guests:null;
+ panel.hidden=(!local&&!s.social.detained)||!spot||Boolean(travel||cast);
+ if(panel.hidden)return;
+ $('social-venue').textContent=s.social.detained?'Trạm cảnh sát':spot.name;
+ $('social-stats').textContent='Uy tín '+s.social.reputation+' · '+s.social.followers.toLocaleString('vi-VN')+' theo dõi · '+s.social.clips+' clip';
+ $('social-banter').textContent=s.social.detained?'Chuyến đi tạm dừng để giải quyết vụ xô xát ở '+spot.name+'.':S.banter(s,spot);
+ const response=$('social-response');
+ response.hidden=!socialResponse;response.textContent=socialResponse;
+ content.replaceChildren();
+ function finish(message,animation,duration=2.4){
+  if(!message)return;
+  socialResponse=message;say(message);if(animation)animate(animation,duration);save();render();
+ }
+ if(s.social.detained){
+  panel.open=true;
+  content.append(socialButton('Giải quyết ở trạm',()=>finish(S.settle(s))));
+  return;
+ }
+ if(!spot.guests.includes(socialGuest))socialGuest=spot.guests[0];
+ const selector=dom('div');selector.className='social-guests';
+ for(const id of spot.guests){
+  const button=socialButton(S.creators[id].name,()=>{socialGuest=id;socialResponse='';renderSocial(true);});
+  button.setAttribute('aria-pressed',String(id===socialGuest));selector.append(button);
+ }
+ const id=socialGuest,creator=S.creators[id],person=S.contact(s,id);
+ const profile=dom('div'),portrait=dom('img'),description=dom('div');
+ profile.className='social-profile';portrait.src='assets/creator-'+id+'.webp';portrait.alt=creator.name;portrait.loading='lazy';
+ description.append(dom('strong',creator.name+' · '+creator.role),dom('p',creator.handle+' · Thân thiết '+person.bond+'/100'),dom('p',creator.bio));
+ profile.append(portrait,description);
+ const actions=dom('div');actions.className='social-actions';
+ for(const [key,details] of Object.entries(S.actions)){
+  const label=key==='outing'?spot.outing+' · '+details.cost+'k':details.label;
+  const button=socialButton(label,()=>finish(S.interact(s,id,key),key==='clip'?'photo':key==='meal'?'meal':null),!S.available(s,id,key,spot));
+  if(person.bond<(details.min??0))button.title='Cần thân thiết '+details.min;
+  else if(person.done[key]===E.day(s))button.title='Đã làm hôm nay';
+  actions.append(button);
+ }
+ content.append(selector,profile,actions);
+ if(S.conflict(s,spot)){
+  const incident=dom('div'),choices=dom('div');incident.className='social-incident';choices.className='social-actions';
+  incident.append(dom('p','Hai khách cãi nhau vì chen hàng. Anh muốn xử lý thế nào?'));
+  choices.append(socialButton('Can ngăn',()=>finish(S.resolve(s,'calm'))),
+   socialButton('Gây gổ',()=>{setAuto(false);finish(S.resolve(s,'fight'),'scuffle',1.35);}));
+  incident.append(choices);content.append(incident);
+ }
+}
 function render(){
  const p=places[selected],local=selected===s.at;
  $('mode').textContent=modes[activeMode()].name;$('money').textContent=s.money+'k ₫';updateStats();
@@ -467,9 +528,10 @@ function render(){
  $('mission').textContent=s.photos.length===3?'Hoàn thành bộ ảnh Hà Giang!':'Bộ ảnh Hà Giang: '+s.photos.length+'/3';
  $('party').hidden=!party.length;$('party').textContent=party.length?'Đi cùng '+party.join(' · '):'';
  $('message').textContent=showText;marker.textContent=petIcons||modes[activeMode()].icon;marker.title=modes[activeMode()].name;
- pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);
+ pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);renderSocial(local);
  if(travel){route(travel.plan,travel.d);supplyActions();return;}
  position(...coords(places[s.at]));
+ if(s.social.detained){route(null);return;}
  if(cast){route(null);action('Giật cần',catchNow);return;}
  if(selected>=7)action('Đối chiếu trên bản đồ thật',()=>setView(false,true,selected));
  if(!local){
@@ -619,7 +681,7 @@ function loop(ms){
  drawScene(ms);
  requestAnimationFrame(loop);
 }
-$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();$('wardrobe').open=true;selected=0;travel=null;cast=null;activity=null;openHost=null;idleRoute=previewRoute();orbit=0;look=0;viewpoint=false;clothingPreview=false;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
+$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=newState();$('wardrobe').open=true;selected=0;travel=null;cast=null;activity=null;openHost=null;socialGuest=null;socialResponse='';idleRoute=previewRoute();orbit=0;look=0;viewpoint=false;clothingPreview=false;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
 if(s.at!==0&&!E.encounter(s)){E.meet(s);save();}
 buildTerrain();overview();initialized=true;setView(Boolean(scene));render();requestAnimationFrame(loop);
 })();

@@ -83,6 +83,18 @@ footer{font-size:.78rem;color:#4e6355}
 #drive-controls #jump{margin-left:3px;padding-inline:11px}
 #drive-controls #pickup-item{background:#fee5ac;color:#633e16;border-color:#b38b51}
 .wardrobe summary{font-weight:700;color:var(--pine)}
+.social summary{font-weight:700;color:var(--pine)}
+#social-stats,#social-banter,#social-response,.social-profile,.social-incident{font-size:.8rem}
+#social-stats{color:#466354;font-weight:600}
+#social-banter{color:#526658;border-left:2px solid #bdac7f;padding-left:8px}
+#social-response{padding:6px 8px;border-radius:6px;background:#e3ebda;color:#234638}
+.social-guests,.social-actions{display:flex;flex-wrap:wrap;gap:5px}
+.social-guests button,.social-actions button{font-size:.76rem;min-height:32px}
+.social-guests button[aria-pressed="true"]{background:var(--pine);color:#fff9e7}
+.social-profile{display:grid;grid-template-columns:57px 1fr;gap:8px;align-items:center;margin:8px 0}
+.social-profile img{width:57px;height:78px;object-fit:cover;object-position:0 8%;background:#e0e7d5;border-radius:7px}
+.social-profile p{margin:.15em 0}
+.social-incident{border-top:1px solid #d8c9aa;margin-top:10px;padding-top:6px}
 #current-clothing{float:right;margin-left:8px;font-size:.76rem;font-weight:400}
 #clothing-options{display:grid;gap:5px;margin-top:10px}
 .clothing-option{display:grid;grid-template-columns:13px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.8rem}

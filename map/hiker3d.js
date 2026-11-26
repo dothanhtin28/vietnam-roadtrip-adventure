@@ -266,6 +266,7 @@ globalThis.WindHiker=(()=>{
     if(last==='drink')to=side?[.08,1.58+.26*Math.sin(clamp(t,0,1)*PI/2),.241]:base;
     if(last==='rest')to=[sign*.26,1.08,.46];
     if(last==='photo')to=[sign*.113,2.069,.313];
+   if(last==='scuffle')to=[sign*.32,1.58+.18*Math.sin(t*5+sign),.35];
     return between(base,to,mixActivity);
    }
    const poles=trekking&&mode==='walk'&&mixActivity<.10;

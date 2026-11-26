@@ -174,13 +174,14 @@ function attach(canvas){
  };
  const panorama=image('assets/ha-giang-panorama.webp'),terraces=image('assets/rice-terraces.webp'),tree=image('assets/cypress.webp'),gorge=image('assets/nho-que-gorge.webp'),farmer=image('assets/field-worker.webp');
  const house=image('assets/village-house.webp');
+ const creatorImages=Object.fromEntries(Object.keys(globalThis.TripSocial?.creators??{}).map(id=>[id,image('assets/creator-'+id+'.webp')]));
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
  const heroImages=Object.fromEntries(['shell','canvas','leather','cordura','backpack'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const photoSurface=kind=>kind==='backpack';
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing,clothingPreview=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing,clothingPreview=false,socialGuests=null,detained=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
@@ -649,6 +650,21 @@ function attach(canvas){
     return add(p,(u*cos+(w+lean)*sin)*size,v*size,((w+lean)*cos-u*sin)*size);
    },pose,'walk',false,outfit);
   }
+  if(socialGuests){
+   const speaking=Math.floor(seconds/4)%socialGuests.length;
+   for(const [i,id] of socialGuests.entries()){
+    const guest=globalThis.TripSocial.creators[id],side=i===0?3.9:6.0;
+    const p=shift(base,side,0,7.7+i*.7);
+    p.h=land(p.x,p.z)+.12;
+    const sway=!reduced&&speaking===i?Math.sin(seconds*3)*.028:0;
+    billboard(creatorImages[id],p,2.54,{sway,flip:i===0});
+    if(!creatorImages[id]?.naturalWidth||!ctx.fillText)continue;
+    const [x,y,z]=tr(add(p,0,2.91,0));
+    if(z<=near||z>35)continue;
+    const text=guest.name+(speaking===i?' …':'');
+    faces.push({label:text,x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
+   }
+  }
   for(const farm of farms){
    if(Math.hypot(farm.x-cam.x,farm.z-cam.z)>61||!farm.rows.length)continue;
    const crop=farm.rows[Math.floor(farm.rows.length*.34)].crop;
@@ -708,6 +724,11 @@ function attach(canvas){
   }
   faces.sort((a,b)=>a.layer-b.layer||b.depth-a.depth);
   for(const f of faces){
+   if(f.label){
+    ctx.font='600 13px system-ui';ctx.textAlign='center';
+    ctx.strokeStyle='#243329';ctx.lineWidth=3;ctx.strokeText(f.label,f.x,f.y);
+    ctx.fillStyle='#fff7e6';ctx.fillText(f.label,f.x,f.y);continue;
+   }
    if(f.icon){ctx.font=f.size+'px system-ui';ctx.textAlign='center';ctx.fillText(f.icon,f.x,f.y);continue;}
    if(f.sprite){
     ctx.save();ctx.globalAlpha=f.opacity;
@@ -746,6 +767,13 @@ function attach(canvas){
     }
     ctx.lineWidth=1;ctx.strokeStyle='rgba(226,240,242,'+rain*.55+')';ctx.stroke();
    }
+  }
+  if(detained&&ctx.fillText){
+   const caption=action==='scuffle'?'Vụ xô xát':'Đang giải quyết ở trạm cảnh sát';
+   const width=Math.min(280,W-24),left=(W-width)*.5,top=H*.15;
+   ctx.fillStyle='#273c39e8';ctx.fillRect(left,top,width,28);
+   ctx.font='600 13px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff3db';
+   ctx.fillText(caption,W*.5,top+18);
   }
  };
  return {render,reset:()=>{angle=null;camera=null;actorYaw=null;actorPosition=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;actor.reset();follower.reset();}};
