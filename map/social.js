@@ -275,6 +275,18 @@ globalThis.TripSocial=(()=>{
   return Boolean(owns(actions,key)&&spot?.guests.includes(id)&&!s.social.detained
    &&visible(s,id,key)&&!requirements(s,id,key));
  }
+ function availableOnRoad(s,id,key){
+  return owns(creators,id)&&['greet','chat'].includes(key)&&!s.social.detained&&life(id,s.clock).kind==='travel'&&!requirements(s,id,key);
+ }
+ function talkOnRoad(s,id,key){
+  if(!availableOnRoad(s,id,key))return '';
+  const stage=life(id,s.clock),person=contact(s,id),act=actions[key];
+  s.social.contacts[id]=person;
+  person.done[key]=dayOf(s);person.bond=limit(person.bond+act.gain,0,100);
+  s.clock+=act.minutes;
+  const name=creators[id].name,destination=D.places[stage.to].name;
+  return key==='greet'?name+' nói “Chào anh! Tôi đang trên đường tới '+destination+'.”':name+' kể về công việc và dự định ở '+destination+'.';
+ }
  function interact(s,id,key,random=Math.random){
   if(!owns(creators,id)||!owns(actions,key)||!available(s,id,key))return '';
   const act=actions[key],person=contact(s,id),{name,romance}=creators[id];
@@ -382,5 +394,5 @@ globalThis.TripSocial=(()=>{
   s.money-=fee;s.clock+=100;s.social.detained=null;
   return 'Đã giải quyết ở trạm'+(fee?' · −'+fee+'k':'')+'. Anh có thể tiếp tục chuyến đi.';
  }
- return {creators,actions,restore,venue,appearance,bathing,life,lifeProfile,stagePlace,travelAt,contact,banter,visible,requirements,available,interact,familyStatus,familyAction,conflict,resolve,settle};
+ return {creators,actions,restore,venue,appearance,bathing,life,lifeProfile,stagePlace,travelAt,contact,banter,visible,requirements,available,interact,availableOnRoad,talkOnRoad,familyStatus,familyAction,conflict,resolve,settle};
 })();

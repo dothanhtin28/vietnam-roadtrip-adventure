@@ -31,6 +31,7 @@
 <button id="turn-around" type="button" aria-keyshortcuts="Q" hidden>Quay đầu</button>
 <button id="pickup-item" type="button" aria-keyshortcuts="E" hidden>Nhặt đồ</button>
 </div><div id="trail-extra"></div></div></section>
+<div id="nearby-guests" aria-label="Trò chuyện với người ở gần" hidden></div>
 <div id="pace" class="pace" aria-label="Tốc độ, quãng đường, độ dốc, thời tiết và thể trạng"><strong id="pace-speed">Đang dừng</strong><span id="pace-distance"></span><span id="pace-grade"></span><span id="pace-shape"></span><span id="pace-weather"></span><span id="pace-obstacle"></span><span id="pace-boost"></span></div>
 <div id="map-nav" class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
 <div id="map-caption" class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
@@ -64,4 +65,5 @@
 </section>
 <section id="phone-profile" aria-label="Hồ sơ và hành trình"></section>
 </div></dialog>
+<dialog id="guest-dialog" aria-labelledby="guest-name"><div class="phone-bar"><h2 id="guest-name"></h2><button id="close-guest" type="button">Đóng</button></div><div class="guest-dialog-content"><p id="guest-route"></p><p id="guest-reply" role="status" hidden></p><div id="guest-actions" class="social-actions"></div></div></dialog>
 </main><script src="data.js"></script><script src="engine.js"></script><script src="social.js"></script><script src="hiker3d.js"></script><script src="assets/hiker-rig.js"></script><script src="hiker-webgl.js"></script><script src="scene3d.js"></script><script src="music.js"></script><script src="map.js"></script></body></html>

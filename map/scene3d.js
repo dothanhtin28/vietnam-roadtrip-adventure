@@ -10,6 +10,11 @@ const trailStart=E.profile(0,7).at(-1).d,ridgeEnd=E.profile(0,8).at(-1).d;
 const river=D.riverPath.map(([x,z])=>({x,z,h:18}));
 const canyonBlend=x=>cap((x-1115)/67,0,1);
 const smooth=t=>t*t*(3-2*t);
+const walkKnees={an:[.87,.52],bao:[.67,.50],'basket-maker':[.67,.59],duy:[.65,.54],'field-hand':[.63,.51],khoi:[.68,.59],linhnghe:[.74,.58],nhi:[.73,.54],quynh:[.66,.50],'tea-grower':[.68,.49],thao:[.64,.54],weaver:[.71,.49],yenchi:[.87,.48]};
+function stepGuest(distance,target,pace,dt){
+ const gap=target-distance,maxStep=pace*dt;
+ return distance+cap(gap,-maxStep,maxStep);
+}
 const roadEdge=d=>d>=trailStart?1.28+Math.sin(d*.16)*.10:3.48+Math.sin(d*.16)*.18+Math.sin(d*.49)*.07;
 function riverPoint(x,z){
  let closest=Infinity,point=river[0];
@@ -170,8 +175,8 @@ function attach(canvas){
  let densityScale=1,frameAverage=.025,qualityCheck=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
  const hikerMotion=globalThis.TrailHikerMotion?.create();
- const npcRoutes=new Map(),npcRigs=new Map();
- let npcClock=null;
+ const npcRoutes=new Map(),roadActors=new Map(),stopActors=new Map();
+ let guestHits=[];
  const image=src=>{
   if(typeof Image==='undefined')return null;
   const bitmap=new Image();bitmap.src=src;return bitmap;
@@ -179,16 +184,17 @@ function attach(canvas){
  const panorama=image('assets/ha-giang-panorama.webp'),terraces=image('assets/rice-terraces.webp'),tree=image('assets/cypress.webp'),gorge=image('assets/nho-que-gorge.webp'),farmer=image('assets/field-worker.webp');
  const house=image('assets/village-house.webp');
  const creatorAssets=Object.entries(globalThis.TripSocial?.creators??{}).map(([id,creator])=>creator.asset??id);
+ const guestSeeds=new Map(Object.keys(globalThis.TripSocial?.creators??{}).map(id=>[id,Array.from(id).reduce((seed,char)=>(seed*31+char.charCodeAt(0))%65521,0)]));
  const creatorImages=Object.fromEntries([...new Set(creatorAssets)].map(id=>[id,image('assets/creator-'+id+'.webp')]));
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
  const heroImages=Object.fromEntries(['shell','canvas','leather','cordura'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,roadGuests=[],shoreVisitors=[],romanceGuest=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,roadGuests=[],shoreVisitors=[],romanceGuest=null,talkGuest=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
+  guestHits=[];
   const frameGap=lastFrame===null?.033:seconds-lastFrame,dt=cap(frameGap,0,.08);lastFrame=seconds;
-  npcClock=npcClock===null||Math.abs(clock-npcClock)>8?clock:mix(npcClock,clock,1-Math.exp(-dt*5));
   if(frameGap>0&&frameGap<.18)frameAverage=mix(frameAverage,frameGap,.09);
   if(qualityCheck===null)qualityCheck=seconds;
   if(!clothingPreview&&seconds-qualityCheck>.7){
@@ -369,13 +375,16 @@ function attach(canvas){
    faces.push({sprite,...bounds,sway:0,opacity:1,layer,depth:z-1.8});
    return true;
   }
-  function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1,colorShift=0}={}){
+  function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1,colorShift=0,stride=null,guest=null}={}){
    if(!bitmap?.naturalWidth)return false;
    const [x,y,depth]=tr(p);
    if(depth<=near||depth>165)return true;
    const h=height*focal/depth,w=h*bitmap.naturalWidth/bitmap.naturalHeight;
    const left=W*.5+x*focal/depth-w*.5,top=horizon-y*focal/depth-h;
-   if(left<W&&left+w>0&&top<H&&top+h>0)faces.push({sprite:bitmap,left,top,width:w,height:h,flip,sway,opacity,layer,depth,colorShift});
+   if(left<W&&left+w>0&&top<H&&top+h>0){
+    faces.push({sprite:bitmap,left,top,width:w,height:h,flip,sway,opacity,layer,depth,colorShift,stride});
+    if(guest)guestHits.push({...guest,left:left-5,top:top-25,right:left+w+5,bottom:top+h,depth,center:left+w/2,labelWidth:guest.name.length*3.8+8});
+   }
    return true;
   }
   const baseX=Math.floor(cam.x/STEP)*STEP,baseZ=Math.floor(cam.z/STEP)*STEP;
@@ -768,37 +777,59 @@ function attach(canvas){
    },pose,'walk',false,outfit);
   }
   const society=globalThis.TripSocial;
-  let walkers=0;
+  const activeRoad=new Set();
   for(const {id,from,to,start,end} of roadGuests){
-   const key=from+':'+to;
-   if(!npcRoutes.has(key))npcRoutes.set(key,E.profile(from,to));
-   const path=npcRoutes.get(key),length=path.at(-1).d;
-   const seed=Array.from(id).reduce((sum,char)=>sum+char.charCodeAt(0),0);
-   const distance=length*cap((npcClock-start)/(end-start),0,1),p=E.roadPoint(path,distance,2.35+rand(seed)*.55);
-   const [x,y,z]=tr(add(p,0,2.78,0));
-   if(z<=near||z>52||Math.abs(x)>8+z*.85||walkers>=5)continue;
-   walkers++;
-   const ahead=E.sample(path,distance+1),behind=E.sample(path,distance-1);
-   const yaw=Math.atan2(ahead.x-behind.x,ahead.z-behind.z),cs=Math.cos(yaw),sn=Math.sin(yaw),guest=society.creators[id];
-   if(z<27&&walkers<=2){
-    if(!npcRigs.has(id))npcRigs.set(id,WindHiker.create(seed));
-    const pace=1.58+(rand(seed)*.44),size=.92+rand(seed+2)*.12;
-    const pose=npcRigs.get(id).pose({moving:!reduced,actualSpeed:pace,seconds,dt,reduced});
-    const outfit=guest.gender==='female'?['fern','plum','azure','gold'][seed%4]:seed%2?'indigo':'trailMan';
-    WindHiker.draw((points,paint,light)=>face(points,paint,light,-.55),([u,v,w])=>add(p,(u*cs+w*sn)*size,v*size+.14,(w*cs-u*sn)*size),pose,'walk',false,outfit);
-   }else billboard(creatorImages[guest.asset??id],p,2.45,{sway:reduced?0:Math.sin(seconds*7+seed)*.035,flip:Math.sin(yaw-angle)<0,colorShift:guest.colorShift});
-   if(ctx.fillText)faces.push({label:guest.name,x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
+   if(socialGuests?.includes(id))continue;
+   activeRoad.add(id);
+   const routeKey=from+':'+to;
+   if(!npcRoutes.has(routeKey))npcRoutes.set(routeKey,E.profile(from,to));
+   const path=npcRoutes.get(routeKey),length=path.at(-1).d;
+   const seed=guestSeeds.get(id)??0;
+   const target=length*cap((clock-start)/(end-start),0,1),key=routeKey+'/'+start,lane=2.55+rand(seed)*.56;
+   let walker=roadActors.get(id);
+   if(walker?.key!==key){walker={key,path,lane,distance:target,phase:rand(seed)*TAU,weight:0,opacity:0};roadActors.set(id,walker);}
+   const before=E.roadPoint(path,walker.distance,lane);
+   const nearby=Math.hypot(before.x-pos.x,before.z-pos.z)<74;
+   if(!nearby){walker.distance=target;walker.opacity=0;walker.weight=0;continue;}
+   const pace=.87+rand(seed+21)*.35;
+   const next=talkGuest===id?walker.distance:stepGuest(walker.distance,Math.max(target,walker.distance),pace,dt);
+   const step=next-walker.distance;
+   walker.distance=next;
+   walker.phase=(walker.phase+step*TAU/1.38)%TAU;
+   walker.weight=mix(walker.weight,dt?cap(step/(dt*pace),0,1):0,1-Math.exp(-dt*8));
+   walker.opacity=Math.min(1,walker.opacity+dt*2.4);
+  }
+  function drawGuest(id,p,{phase=0,weight=0,opacity=1,road=false,talking=false,interactive=false}={}){
+   const person=society.creators[id],asset=person.asset??id;
+   const proximity=Math.hypot(p.x-pos.x,p.z-pos.z);
+   const stride=weight>.03&&!reduced?{phase,weight,knees:walkKnees[asset]}:null;
+   const sway=reduced?0:stride?Math.sin(phase)*weight*.017:talking?Math.sin(seconds*2.5)*.012:0;
+   const guest=interactive&&proximity<45?{id,road,proximity,name:person.name,canTalk:proximity<(road?9:22)}:null;
+   if(!billboard(creatorImages[asset],p,2.45,{opacity,colorShift:person.colorShift,stride,sway,guest}))return;
+   if(!ctx.fillText||opacity<.5)return;
+   const [x,y,z]=tr(add(p,0,2.72,0));
+   if(z>near&&z<40)faces.push({label:person.name+(talking?' …':''),x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
+  }
+  for(const [id,walker] of roadActors){
+   const active=activeRoad.has(id);
+   if(!active){
+    walker.opacity-=dt*1.6;
+    if(walker.opacity<=0||socialGuests?.includes(id)){roadActors.delete(id);continue;}
+   }
+   if(!walker.opacity)continue;
+   const p=E.roadPoint(walker.path,walker.distance,walker.lane);
+   if(Math.hypot(p.x-cam.x,p.z-cam.z)>57)continue;
+   drawGuest(id,p,{...walker,road:true,talking:talkGuest===id,interactive:active&&walker.opacity>.65&&!detained});
   }
   if(socialGuests?.length){
    const speaking=Math.floor(seconds/4)%socialGuests.length;
    const sn=Math.sin(direction),cs=Math.cos(direction);
    for(const [i,id] of socialGuests.entries()){
-    const guest=society.creators[id],responding=courting&&id===romanceGuest,task=society.life(id,clock);
+    const responding=courting&&id===romanceGuest,task=society.life(id,clock);
     const nearGuest=responding?approach:0;
-    const seed=Array.from(id).reduce((sum,char)=>sum+char.charCodeAt(0),0);
+    const seed=guestSeeds.get(id)??0;
     const walk=reduced?0:seconds*(.24+rand(seed)*.13)+seed;
     const pace=task.kind==='rest'?.18:task.kind==='social'?.55:1.12;
-    const busy=!reduced&&pace>.5&&Math.sin(walk*.57+i)>-.32;
     const headingSign=i%2?-1:1;
     const chat=task.kind==='social'&&socialGuests.length>1&&!courting&&i<3;
     const gathering=chat?(reduced?1:smooth(cap((clock-task.start)/14,0,1))):0;
@@ -807,19 +838,17 @@ function attach(canvas){
     const side=mix(mix(patrolSide,-6.6+i*.95,gathering),1.95,nearGuest);
     const ahead=mix(mix(patrolAhead,10.3+i*.78,gathering),2.75,nearGuest);
     const p=add(base,side*cs+ahead*sn,0,ahead*cs-side*sn);
-    p.h=land(p.x,p.z)+.12;
+    let walker=stopActors.get(id);
+    if(!walker||Math.hypot(walker.x-p.x,walker.z-p.z)>27){walker={x:p.x,z:p.z,phase:rand(seed)*TAU,weight:0};stopActors.set(id,walker);}
+    const gap=Math.hypot(p.x-walker.x,p.z-walker.z),step=Math.min(gap,dt*(responding?1.32:.94));
+    if(step){walker.x+=(p.x-walker.x)*step/gap;walker.z+=(p.z-walker.z)*step/gap;}
+    walker.phase=(walker.phase+step*TAU/1.28)%TAU;
+    walker.weight=mix(walker.weight,dt?cap(step/dt,0,1):0,1-Math.exp(-dt*9));
     const talking=courting?responding:speaking===i;
-    const sway=reduced?0:Math.sin(seconds*(busy&&!responding?7:3)+seed)*(busy?.043:talking?.028:.01);
-    if(busy&&!responding)p.h+=Math.abs(Math.sin(seconds*6+seed))*.055;
-    const portrait=creatorImages[guest.asset??id];
-    billboard(portrait,p,2.43+rand(seed*2)*.21,{sway,flip:responding||(gathering>.5?i===0:Math.cos(walk)*headingSign<0),colorShift:guest.colorShift});
-    if(!portrait?.naturalWidth||!ctx.fillText)continue;
-    const [x,y,z]=tr(add(p,0,2.91,0));
-    if(z<=near||z>35)continue;
-    const text=guest.name+(talking?' …':'');
-    faces.push({label:text,x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
+    drawGuest(id,{x:walker.x,z:walker.z,h:land(walker.x,walker.z)+.12},{...walker,talking,interactive:!detained});
    }
   }
+  for(const id of stopActors.keys())if(!socialGuests?.includes(id))stopActors.delete(id);
   for(const farm of farms){
    if(Math.hypot(farm.x-cam.x,farm.z-cam.z)>61||!farm.rows.length)continue;
    const crop=farm.rows[Math.floor(farm.rows.length*.34)].crop;
@@ -876,6 +905,23 @@ function attach(canvas){
    ctx.fillStyle=f.pattern;ctx.fill();
    ctx.restore();
   }
+  function drawGuestStride({sprite,width,height,stride}){
+   const srcWidth=sprite.naturalWidth,srcHeight=sprite.naturalHeight;
+   const {phase,weight,knees:[knee,split]}=stride;
+   const x=-width/2;
+   ctx.drawImage(sprite,0,0,srcWidth,knee*srcHeight,x,-height,width,knee*height);
+   for(const [i,[from,to]] of [[0,split],[split,1]].entries()){
+    const step=phase+i*Math.PI,lift=Math.max(0,Math.sin(step))*weight*height*.042;
+    const reach=Math.cos(step)*weight*width*.073;
+    for(let row=0;row<6;row++){
+     const a=row/6,b=(row+1)/6;
+     const start=knee+a*(1-knee),end=knee+b*(1-knee);
+     const sy=(start-1)*height-lift*a*a,ey=(end-1)*height-lift*b*b;
+     ctx.drawImage(sprite,from*srcWidth,start*srcHeight,(to-from)*srcWidth,(end-start)*srcHeight,
+      x+from*width+reach*a*a,sy,(to-from)*width,ey-sy+.42);
+    }
+   }
+  }
   faces.sort((a,b)=>a.layer-b.layer||b.depth-a.depth);
   for(const f of faces){
    if(f.label){
@@ -890,7 +936,8 @@ function attach(canvas){
     ctx.translate(f.left+f.width*.5,f.top+f.height);
     ctx.rotate(f.sway);
     if(f.flip)ctx.scale(-1,1);
-    ctx.drawImage(f.sprite,-f.width*.5,-f.height,f.width,f.height);
+    if(f.stride?.knees&&f.height>=55)drawGuestStride(f);
+    else ctx.drawImage(f.sprite,-f.width*.5,-f.height,f.width,f.height);
     ctx.restore();continue;
    }
    ctx.beginPath();ctx.moveTo(...f.screen[0]);
@@ -930,7 +977,14 @@ function attach(canvas){
    ctx.fillText(caption,W*.5,top+18);
   }
  };
- return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;npcClock=null;npcRigs.clear();actor.reset();follower.reset();hikerMotion?.reset();}};
+ function hitGuest(u,v){
+  const x=u*canvas.width,y=v*canvas.height;
+  return guestHits.filter(hit=>y>=hit.top&&y<=hit.bottom&&(x>=hit.left&&x<=hit.right||y<hit.top+22&&Math.abs(x-hit.center)<hit.labelWidth)).sort((a,b)=>a.depth-b.depth)[0];
+ }
+ return {render,hitGuest,nearbyGuests:()=>guestHits.filter(hit=>hit.canTalk).sort((a,b)=>a.proximity-b.proximity),reset:()=>{
+  angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;
+  guestHits=[];roadActors.clear();stopActors.clear();actor.reset();follower.reset();hikerMotion?.reset();
+ }};
 }
-return {attach,land};
+return {attach,land,stepGuest};
 })();

@@ -316,6 +316,15 @@ for(const id of Object.keys(S.creators)){
 }
 const commuters=S.travelAt(620);
 assert(commuters.length>5);
+const passing=commuters.find(part=>part.end>654),conversation={...E.fresh(),clock:620,social:S.restore()};
+assert(passing);
+assert.equal(S.talkOnRoad(conversation,passing.id,'chat'),'');
+assert.equal(S.talkOnRoad(conversation,passing.id,'confess'),'');
+assert.match(S.talkOnRoad(conversation,passing.id,'greet'),/đường tới/);
+assert.match(S.talkOnRoad(conversation,passing.id,'chat'),/dự định/);
+assert.equal(S.contact(conversation,passing.id).bond,17);
+assert.equal(conversation.clock,648);
+assert.equal(S.talkOnRoad(conversation,passing.id,'greet'),'');
 for(const {id,from,to,start,end} of commuters){
  assert.notEqual(from,to);assert(start<=620&&620<end);
  assert.equal(S.life(id,end).at,to);

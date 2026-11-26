@@ -31,6 +31,7 @@ let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequest
 let walkVelocity=0;
 let openHost=null,auto=false;
 let socialGuest=null,socialScene=null,socialResponse='',shoreVisitors=[];
+let roadTalk=null,nearbySignature='';
 let clothingPreview=false;
 const jumpDuration=.86;
 const worldUnitsPerKmh=.44;
@@ -113,6 +114,7 @@ function setView(on,geo=false,stop=null){
  geographic=geo;
  in3d=Boolean(on&&scene);if(on&&!scene)say('Thiết bị không mở được góc nhìn 3D. Bản đồ vẫn dùng được.');
  $('scene-panel').hidden=!in3d;vp.hidden=in3d||geo;$('map-nav').hidden=vp.hidden;$('map-caption').hidden=vp.hidden;
+ if(!in3d){$('nearby-guests').hidden=true;nearbySignature='';}
  $('geo-panel').hidden=!geo;$('pace').hidden=geo;
  $('map-view').setAttribute('aria-pressed',String(!vp.hidden));$('scene-view').setAttribute('aria-pressed',String(in3d));$('geo-view').setAttribute('aria-pressed',String(geo));
  if(in3d){scene.reset();lastDraw=0;}
@@ -186,7 +188,7 @@ function lookAtRiver(){
 const canvas=$('canvas3d');
 function drivingKey(e){return inputs[e.key.length===1?e.key.toLowerCase():e.key];}
 window.addEventListener('keydown',e=>{
- if($('phone-dialog').open||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
+ if($('phone-dialog').open||$('guest-dialog').open||e.ctrlKey||e.metaKey||e.altKey||e.target?.closest?.('input,textarea,select,[contenteditable]'))return;
  const key=e.key.toLowerCase();
  if(key==='p'&&!e.repeat){e.preventDefault();openPhone();return;}
  if(!in3d)return;
@@ -214,13 +216,26 @@ for(const dir of ['left','forward','back','right']){
  b.addEventListener('keyup',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();release(e);}});
  b.addEventListener('blur',release);
 }
-canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;cameraDrag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+function guestAt(e){
+ if(!in3d||!$('private-scene').hidden)return;
+ const bounds=canvas.getBoundingClientRect();
+ return scene?.hitGuest?.((e.clientX-bounds.left)/bounds.width,(e.clientY-bounds.top)/bounds.height);
+}
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;cameraDrag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{
- if(cameraDrag?.id!==e.pointerId)return;
+ if(cameraDrag?.id!==e.pointerId){canvas.classList.toggle('over-guest',Boolean(guestAt(e)));return;}
+ if(!cameraDrag.moved&&Math.hypot(cameraDrag.x-e.clientX,cameraDrag.y-e.clientY)<6)return;
+ cameraDrag.moved=true;
  rotate((cameraDrag.x-e.clientX)*.009);tilt((e.clientY-cameraDrag.y)*.007);
  cameraDrag.x=e.clientX;cameraDrag.y=e.clientY;
 });
-['pointerup','pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
+canvas.addEventListener('pointerup',e=>{
+ if(cameraDrag?.id!==e.pointerId)return;
+ const tap=!cameraDrag.moved&&Math.hypot(cameraDrag.x-e.clientX,cameraDrag.y-e.clientY)<6;
+ cameraDrag=null;
+ if(tap){const hit=guestAt(e);if(hit)openGuest(hit);}
+});
+['pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
 let lastStats=NaN;
 function meters(v){['food','water','energy','health','clean'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
 function animate(kind,seconds,guest=null){const at=performance.now();activity={kind,at,until:at+seconds*1000,guest};}
@@ -257,8 +272,9 @@ function drawScene(ms){
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
  const clock=gameClock(),minute=Math.floor(clock);
  if(minute!==travelerMinute){travelerMinute=minute;roadGuests=S.travelAt(minute);}
- scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,roadGuests,shoreVisitors,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock,weather:E.weather(clock),
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,roadGuests,talkGuest:roadTalk,shoreVisitors,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock,weather:E.weather(clock),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,romanceGuest:ms<(activity?.until??0)?activity.guest:null,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
+ renderNearbyGuests();
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
 function say(text){showText=text;$('message').textContent=text;}
@@ -494,6 +510,43 @@ function socialButton(text,click,disabled=false){
  const button=dom('button',text);button.type='button';button.disabled=disabled;button.onclick=click;
  return button;
 }
+function renderNearbyGuests(){
+ const nearby=$('nearby-guests');
+ const people=$('private-scene').hidden?(scene?.nearbyGuests?.()??[]).slice(0,4):[];
+ const stamp=people.map(person=>person.id+Number(person.road)).join('/');
+ if(stamp===nearbySignature)return;
+ nearbySignature=stamp;nearby.hidden=!people.length;
+ nearby.replaceChildren(dom('strong','Trò chuyện với'),...people.map(person=>socialButton(person.name,()=>openGuest(person))));
+}
+function openGuest(person){
+ if(!in3d||cast||s.social.detained)return;
+ const {id,road}=person;
+ if(!person.canTalk){say('Tiến lại gần '+person.name+' để trò chuyện.');return;}
+ if(road){
+  if(!scene.nearbyGuests?.().some(guest=>guest.id===id&&guest.road))return;
+  clearDrive();roadTalk=id;
+  $('guest-name').textContent=S.creators[id].name;
+  $('guest-reply').hidden=true;renderRoadTalk();$('guest-dialog').showModal();return;
+ }
+ if(travel||!S.venue(s)?.guests.includes(id))return;
+ clearDrive();socialGuest=id;socialResponse='';select(s.at);
+ const panel=$('social-panel');panel.open=true;panel.scrollIntoView?.({block:'nearest'});
+ panel.querySelector?.('.social-guests [aria-pressed=true]')?.focus({preventScroll:true});
+}
+function renderRoadTalk(){
+ const id=roadTalk,clock=Math.floor(gameClock()),current={...s,clock},stage=S.life(id,clock),actions=$('guest-actions');
+ $('guest-route').textContent=stage.kind==='travel'?'Trên đường '+S.stagePlace(stage):'Chuyến đi của họ vừa đến điểm dừng.';
+ actions.replaceChildren(...['greet','chat'].map(action=>socialButton(S.actions[action].label,()=>{
+  const state={...s,clock:Math.floor(gameClock())},before=state.clock,message=S.talkOnRoad(state,id,action);
+  if(!message){renderRoadTalk();return;}
+  if(travel)travel.roadMinutes+=state.clock-before;else s.clock+=state.clock-before;
+  const reply=$('guest-reply');reply.hidden=false;reply.textContent=message;say(message);save();renderContacts();renderRoadTalk();
+ },!S.availableOnRoad(current,id,action))),socialButton('Xem trên điện thoại',()=>{
+  $('guest-dialog').close();openPhone(id);
+ }));
+}
+$('close-guest').onclick=()=>$('guest-dialog').close();
+$('guest-dialog').addEventListener('close',()=>{roadTalk=null;});
 const relationshipNames={dating:'Đang yêu',engaged:'Đã đính hôn',married:'Đã kết hôn'};
 function renderSocial(local){
  const panel=$('social-panel'),spot=S.venue(s),content=$('social-content');
@@ -627,8 +680,12 @@ function renderPhoneProfile(force=false){
  timeline('Đã gặp gỡ',life.meetings,part=>part.label+' với '+part.with.map(id=>S.creators[id].name).join(', ')+' · '+places[part.at].name,part=>part.time);
  timeline('Nhật ký gần đây',life.recent,entry,part=>part.start);
 }
-function openPhone(){
+function openPhone(id){
  if(phone.open)return;
+ if(typeof id==='string'){
+  phonePerson=id;phoneKnown=false;$('phone-search').value='';
+  $('phone-all').setAttribute('aria-pressed','true');$('phone-known').setAttribute('aria-pressed','false');
+ }
  clearDrive();renderPhoneList();phone.showModal();$('close-phone').focus();
 }
 $('open-phone').onclick=openPhone;
@@ -760,7 +817,7 @@ function loop(ms){
  const privateScene=ms<(activity?.until??0)&&activity.kind==='private';
  const busy=privateScene||ms<(activity?.until??0)&&(activity.kind==='bath'||activity.kind==='shower');
  if($('private-scene').hidden===privateScene)$('private-scene').hidden=!privateScene;
- const drive=in3d&&!cast&&!busy&&!phone.open?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
+ const drive=in3d&&!cast&&!busy&&!phone.open&&!$('guest-dialog').open?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
  motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);
