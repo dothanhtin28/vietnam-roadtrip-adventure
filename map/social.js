@@ -4,13 +4,76 @@ globalThis.TripSocial=(()=>{
  const creators={
   an:{name:'An Mây',age:26,handle:'@anmay.dian',role:'KOC ẩm thực',bio:'Review quán nhỏ và những món đáng thử ở mỗi bản.',greeting:'Anh có món nào ở Hà Giang muốn thử không? Em đang tìm một quán cơm nhà.',romance:{flirt:'Em thích cách anh nhớ mấy quán nhỏ em kể.',date:'Cùng chọn một món ở quán ven đường rồi chia đôi. Em muốn thử thêm chỗ này với anh.',yes:'Em cũng thích anh. Mình yêu nhau nha?',proposal:'Em đồng ý. Mình làm một đám cưới nhỏ, mời những người đã gặp dọc đường nha anh.'}},
   khoi:{name:'Khôi Đèo',handle:'@khoideo.road',role:'KOL du lịch',bio:'Quay clip đường đèo, chợ phiên và những người gặp trên đường.',greeting:'Anh vừa đi qua đoạn nào đẹp? Em đang ghi lại chuyến đi Hà Giang.'},
-  nhi:{name:'Nhi Gió',age:27,handle:'@nhigio.camp',role:'KOC đồ dã ngoại',bio:'Thử đồ đi đường và giới thiệu các cửa hàng địa phương.',greeting:'Sáng mai em định test bộ pha cà phê cắm trại. Anh hay nghỉ ở đâu?',romance:{flirt:'Nói chuyện với anh vui ghê. Lần sau kể em nghe thêm về chuyến leo đèo nhé.',date:'Mình pha hai ly cà phê rồi ngồi ngắm đường đèo nhé, em mang sẵn bộ pha đây.',yes:'Em cũng có tình cảm với anh. Em muốn tụi mình chính thức hẹn hò.',proposal:'Em đồng ý. Sau này mình vẫn dành thời gian lên đèo pha cà phê với nhau nhé.'}}
+  nhi:{name:'Nhi Gió',age:27,handle:'@nhigio.camp',role:'KOC đồ dã ngoại',bio:'Thử đồ đi đường và giới thiệu các cửa hàng địa phương.',greeting:'Sáng mai em định test bộ pha cà phê cắm trại. Anh hay nghỉ ở đâu?',romance:{flirt:'Nói chuyện với anh vui ghê. Lần sau kể em nghe thêm về chuyến leo đèo nhé.',date:'Mình pha hai ly cà phê rồi ngồi ngắm đường đèo nhé, em mang sẵn bộ pha đây.',yes:'Em cũng có tình cảm với anh. Em muốn tụi mình chính thức hẹn hò.',proposal:'Em đồng ý. Sau này mình vẫn dành thời gian lên đèo pha cà phê với nhau nhé.'}},
+  thao:{name:'Thảo Lâm',age:25,handle:'@thaolam.anh',role:'KOL nhiếp ảnh',stops:['quan','dog','start'],bio:'Chụp sương sớm, ruộng bậc thang và chân dung người đi chợ.',greeting:'Anh đến đúng lúc em đang đợi mây tan trên Núi Đôi.',romance:{flirt:'Anh để ý cả ánh sáng lúc chiều muộn à? Em thích người tinh ý như anh.',date:'Mình chọn một góc rồi mỗi người chụp cho nhau một tấm nhé.',yes:'Em cũng muốn hai đứa hẹn hò.',proposal:'Em đồng ý. Bức ảnh đầu tiên sau lễ cưới để em tự chụp nhé.'}},
+  quynh:{name:'Quỳnh Đạp',age:28,handle:'@quynh.dapdeo',role:'KOC xe đạp',stops:['river','yen','cat'],bio:'Thử cung đạp xe và kể chuyện những trạm nghỉ dọc đèo.',greeting:'Em vừa xuống dốc. Anh có biết gần đây có chỗ bơm bánh không?',romance:{flirt:'Anh nói vậy làm em quên cả mỏi chân.',date:'Mình đi bộ ra bến uống nước rồi xem ai kể chuyện đèo vui hơn.',yes:'Em thích anh. Mình cứ hẹn hò nhé.',proposal:'Em đồng ý. Mình lấy đèo đầu tiên từng đi cùng làm kỷ niệm nha.'}},
+  linhnghe:{name:'Linh Chàm',age:29,handle:'@linhcham.nghe',role:'KOL văn hóa và thủ công',stops:['dog','cat','dong'],bio:'Ghi lại nghề dệt và câu chuyện của các nghệ nhân vùng cao.',greeting:'Em đang tìm người chỉ cách nhận ra một mảnh vải nhuộm chàm.',romance:{flirt:'Em vui vì anh nhớ câu chuyện người thợ hôm trước.',date:'Mình ghé quầy vải chọn một món nhỏ làm kỷ niệm nhé.',yes:'Em muốn mình tìm hiểu nhau nghiêm túc hơn.',proposal:'Em đồng ý. Em muốn tự chọn một mảnh vải cho ngày cưới.'}},
+  yenchi:{name:'Yến Chi',age:26,handle:'@yenchi.comban',role:'KOC món bản',stops:['cat','start','dong'],bio:'Ghi sổ những hàng bánh, bát phở và bữa cơm bản gặp trên đường.',greeting:'Anh giữ bụng đói một chút nhé, em còn muốn thử món bánh ven đường.',romance:{flirt:'Anh làm em cười đến quên ghi tên quán rồi.',date:'Hôm nay mình chọn món cho nhau, tới lúc dọn ra mới bật mí.',yes:'Em cũng thích anh. Mình hẹn hò nha.',proposal:'Em đồng ý. Phần đồ ăn đám cưới cho em chọn cùng anh nhé.'}},
+  duy:{name:'Duy Khung Hình',age:28,handle:'@duy.khung',role:'KOL làm phim',stops:['ma','quan','yen'],bio:'Quay phim tài liệu ngắn về đèo, chợ và các con sông.',greeting:'Anh vừa xuống từ hướng nào? Tôi đang tìm góc quay dọc vách đá.'},
+  bao:{name:'Bảo Mộc',age:31,handle:'@bao.moc',role:'KOC nhạc acoustic',stops:['dong','river','dog'],bio:'Mang đàn đi chợ phiên và thu lại tiếng động dọc đường.',greeting:'Anh thích nghe nhạc ven chợ không? Tôi vừa viết một đoạn lúc qua bến sông.'}
  };
  const venues={
-  start:{name:'Sân cà phê Hà Giang',host:'an',topic:'quán nhỏ ven sông Lô',outing:'Đi dạo bờ sông'},
-  yen:{name:'Phố quán Yên Minh',host:'nhi',topic:'quầy đồ dã ngoại',outing:'Đi chơi ở phố quán'},
-  dong:{name:'Sân chợ Đồng Văn',host:'khoi',topic:'món ăn chợ phiên',outing:'Dạo chợ và nghe nhạc'}
+  start:{name:'Sân cà phê Hà Giang',topic:'quán nhỏ ven sông Lô',outing:'Đi dạo bờ sông'},
+  river:{name:'Bờ kè sông Lô',topic:'chiếc thuyền bên bến',outing:'Dạo bờ kè'},
+  dog:{name:'Sân đầu bản',topic:'nghề dệt trong bản',outing:'Dạo quanh bản'},
+  quan:{name:'Điểm ngắm Núi Đôi',topic:'mây trên Núi Đôi',outing:'Đi chụp ảnh quanh thung lũng'},
+  yen:{name:'Phố quán Yên Minh',topic:'quầy đồ dã ngoại',outing:'Đi chơi ở phố quán'},
+  cat:{name:'Hiên quán cao nguyên',topic:'quán cơm ở đầu ngõ',outing:'Dạo ngõ cao nguyên'},
+  dong:{name:'Sân chợ Đồng Văn',topic:'món ăn chợ phiên',outing:'Dạo chợ và nghe nhạc'},
+  ma:{name:'Điểm dừng bên đèo',topic:'góc quay nhìn xuống hẻm Tu Sản',outing:'Dạo quanh điểm ngắm đèo'}
  };
+ const destinations=Object.keys(venues),hours=[360,660,1020],cycleDays=5;
+ for(const person of Object.values(creators))person.gender=person.romance?'female':'male';
+ const specialties=[
+  ['KOL nhiếp ảnh','chụp ảnh mùa lúa', 'Anh biết chỗ nào đón nắng đẹp buổi sớm không?'],
+  ['KOC món bản','thử các hàng ăn nhỏ', 'Anh đã thử món nào ở bản này chưa?'],
+  ['KOL du lịch','ghi lại những chuyến đi vùng cao', 'Anh muốn ghé điểm nào trên cung đường này?'],
+  ['KOC đồ dã ngoại','thử lều và đồ cắm trại', 'Anh thường mang món gì nhẹ nhất khi đi đèo?'],
+  ['KOL quay phim','quay những con đường và phiên chợ', 'Theo anh góc nào kể được câu chuyện của chỗ này?'],
+  ['KOC xe đạp','khảo sát các dốc và trạm nghỉ', 'Đoạn đường anh vừa qua có dễ đạp xe không?'],
+  ['KOL văn hóa','tìm hiểu nghề thủ công', 'Anh có gặp người dệt vải ở bản nào dọc đường không?'],
+  ['KOC cà phê','tìm quán và thử các cách pha', 'Anh hay uống cà phê ở đâu khi đi xa?'],
+  ['KOL âm nhạc','thu âm thanh dọc đường', 'Anh nghe thấy tiếng nhạc ở phía chợ không?'],
+  ['KOC video ngắn','dựng clip về vẻ đẹp ven đường', 'Nếu quay một đoạn ở đây, anh muốn mở đầu bằng gì?']
+ ];
+ const visitingGroups=[
+  {gender:'female',first:'Mai Lan Hạ Vân Trúc Thu Ngọc Thanh Diệp Kim Hương Thư Nhã Hoài Minh Hà Tú Bích Ánh Trâm An Mỹ'.split(' '),last:['Vy','Lam','Nhi'],assets:['thao','quynh','linhnghe','yenchi','an','nhi']},
+  {gender:'male',first:'Hải Nam Tùng Sơn Phúc Vũ Lâm Tiến Nhật Bách Khang Phong Thái Đức'.split(' '),last:['Khánh','Huy'],assets:['duy','bao','khoi']}
+ ];
+ let visitor=0;
+ for(const {gender,first,last,assets} of visitingGroups){
+  for(const given of first)for(const middle of last){
+   const index=visitor++,id='guest-'+(index+1),name=given+' '+middle;
+   const [role,specialty,greeting]=specialties[index%specialties.length];
+   const handle=name.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().replace(' ','.');
+   const romance=gender==='female'?{
+    flirt:['Em thích cách anh nhìn những điều nhỏ trên đường.','Anh nói vậy làm em muốn nán lại đây lâu hơn.','Hôm nay nói chuyện với anh vui ghê.'][index%3],
+    date:'Mình dành buổi này để '+specialty+' cùng nhau nhé.',
+    yes:['Em cũng có tình cảm với anh. Mình hẹn hò nhé.','Em đồng ý. Mình dành thời gian cho nhau nhiều hơn nha.'][index%2],
+    proposal:'Em đồng ý. Mình giữ một ngày thật đẹp trong chuyến đi này nhé.'
+   }:undefined;
+   creators[id]={name,gender,age:23+index%12,handle:'@'+handle+'.road',role,bio:'Đi nhiều nơi để '+specialty+'.',greeting,romance,
+    openAt:32+(index%4)*3,asset:assets[index%assets.length],colorShift:(index%7-3)*6,visit:(index*37+3)%(destinations.length*hours.length*cycleDays)};
+  }
+ }
+ const villagers=[
+  ['Lò Thị Pha','female','dog','Chăm đồi chè','tea-grower'],['Vàng Thị Dế','female','dog','Dệt vải lanh','weaver'],['Sùng Thị Mỷ','female','cat','Bán bánh ngô','weaver'],
+  ['Hoàng Thị Én','female','quan','Trồng rau trên nương','tea-grower'],['Lý Thị Duyên','female','river','Bán chè và nước lá','weaver'],['Triệu Thị Hoa','female','cat','Chăm vườn mận','tea-grower'],
+  ['Phàn Thị Nụ','female','dong','Mang rau ra chợ phiên','tea-grower'],['Lò Văn Lâm','male','river','Chở hàng qua bến','basket-maker'],['Vàng A Sáng','male','dog','Làm nương ngô','field-hand'],['Hoàng Văn Định','male','cat','Đan giỏ tre','basket-maker']
+ ];
+ for(const [index,[name,gender,home,role,asset]] of villagers.entries()){
+  const stops=[home,index%2?'dong':'yen',home];
+  const romance=gender==='female'?{flirt:'Nói chuyện với anh vui hơn em tưởng.',date:'Xong việc, mình đi dạo quanh bản nhé.',yes:'Em đồng ý. Lúc nào rảnh anh lại ghé bản nhé.',proposal:'Em đồng ý. Mình cùng về thưa chuyện với gia đình nha.'}:undefined;
+  creators['local-'+(index+1)]={name,gender,home,stops,role,asset,romance,age:24+index,openAt:40+index%3*4,colorShift:(index%5-2)*9,bio:'Quanh năm làm việc ở '+D.places.find(place=>place.id===home).name+'.',greeting:'Anh có cần tôi chỉ lối quanh đây không?'};
+ }
+ const regulars=Object.entries(creators).filter(([,person])=>person.visit===undefined);
+ for(const person of Object.values(creators)){
+  if(person.visit===undefined)continue;
+  const slot=Math.floor(person.visit/destinations.length),clock=Math.floor(slot/hours.length)*1440+hours[slot%hours.length];
+  const location=destinations[person.visit%destinations.length];
+  const used=new Set(regulars.filter(([id])=>where(id,clock)===location).map(([id,member])=>member.asset??id));
+  if(used.has(person.asset))person.asset=visitingGroups.find(group=>group.gender===person.gender).assets.find(asset=>!used.has(asset))??person.asset;
+ }
  const actions={
   greet:{label:'Chào hỏi',gain:10,minutes:10},
   chat:{label:'Trò chuyện',gain:7,minutes:18,min:10},
@@ -20,6 +83,7 @@ globalThis.TripSocial=(()=>{
   flirt:{label:'Tán tỉnh',gain:3,minutes:12,min:17,affection:16},
   date:{label:'Mời đi hẹn hò',gain:9,minutes:50,min:30,interest:16,affection:20},
   confess:{label:'Ngỏ lời yêu',gain:0,minutes:15,min:35,interest:20},
+  discussOpen:{label:'Bàn về hẹn hò mở',minutes:15,min:32},
   proposal:{label:'Cầu hôn',min:68,interest:70,dates:3,minutes:20},
   wedding:{label:'Tổ chức đám cưới',minutes:120},
   planFamily:{label:'Bàn chuyện có con',minutes:20},
@@ -39,7 +103,12 @@ globalThis.TripSocial=(()=>{
    const saved=data?.contacts?.[id],done={};
    if(!saved)continue;
    for(const action of Object.keys(actions))done[action]=int(saved.done?.[action],Number.MAX_SAFE_INTEGER);
-   contacts[id]={bond:int(saved.bond,100),done,affection:int(saved.affection,100),dates:int(saved.dates,999)};
+   const dates=int(saved.dates,999),legacy=id===data.partner;
+   const status=saved.relationship??(legacy?data.union??'dating':null);
+   const relationship=adultPartner(id)&&dates>=2&&['dating','engaged','married'].includes(status)?status:null;
+   contacts[id]={bond:int(saved.bond,100),done,affection:int(saved.affection,100),dates,relationship,
+    open:adultPartner(id)&&saved.open===true,planFamily:relationship==='married'&&(saved.planFamily??(legacy&&data.planFamily))===true,
+    privateDay:relationship?int(saved.privateDay??(legacy?data.privateDay:0),Number.MAX_SAFE_INTEGER):0};
   }
   const incidents={};
   for(const id of Object.keys(venues)){
@@ -47,37 +116,70 @@ globalThis.TripSocial=(()=>{
    if(saved&&Number.isSafeInteger(saved.day)&&['calm','fight'].includes(saved.outcome))incidents[id]={day:saved.day,outcome:saved.outcome};
   }
   const detained=owns(venues,data?.detained)?data.detained:null;
-  const partner=adultPartner(data?.partner)&&contacts[data.partner]?.dates>=2?data.partner:null;
-  const union=partner&&['engaged','married'].includes(data?.union)?data.union:null;
   const family=adultPartner(data?.family?.parent)&&int(data.family.dueAt,Number.MAX_SAFE_INTEGER)>0?{parent:data.family.parent,dueAt:data.family.dueAt,lastCare:int(data.family.lastCare,Number.MAX_SAFE_INTEGER)}:null;
-  return {contacts,incidents,detained,partner,union,planFamily:union==='married'&&data?.planFamily===true,privateDay:partner?int(data?.privateDay,Number.MAX_SAFE_INTEGER):0,family,followers:int(data?.followers,999999),clips:int(data?.clips,99999),reputation:int(data?.reputation??50,100)};
+  return {contacts,incidents,detained,family,followers:int(data?.followers,999999),clips:int(data?.clips,99999),reputation:int(data?.reputation??50,100)};
+ }
+ function where(id,clock){
+  const person=creators[id],day=Math.floor(clock/1440),minute=clock%1440;
+  const period=minute>=hours[2]?2:minute>=hours[1]?1:minute>=hours[0]?0:-1;
+  if(id==='an')return 'start';
+  if(id==='nhi')return 'yen';
+  if(id==='khoi')return day%2===0&&period===2?'start':'dong';
+  if(period<0)return null;
+  if(person.stops)return person.stops[period];
+  const visit=Math.floor(person.visit/destinations.length);
+  return day%cycleDays===Math.floor(visit/hours.length)&&period===visit%hours.length?destinations[person.visit%destinations.length]:null;
+ }
+ function bathing(s){
+  const id=D.places[s.at].id,minute=s.clock%1440,day=dayOf(s);
+  if(!['river','dog'].includes(id)||!((minute>=360&&minute<510)||(minute>=1020&&minute<1140)))return [];
+  if((day*7+(id==='river'?0:4)+(minute<510?0:2))%11>=3)return [];
+  return Object.keys(creators).filter(key=>creators[key].home===id&&where(key,s.clock)===id).slice(0,1+(day%2));
+ }
+ function appearance(s,id){
+  const here=where(id,s.clock);
+  if(here)return venues[here].name;
+  const today=Math.floor(s.clock/1440);
+  for(let offset=0;offset<=cycleDays;offset++)for(const hour of hours){
+   const clock=(today+offset)*1440+hour,place=where(id,clock);
+   if(clock>s.clock&&place)return venues[place].name+' · ngày '+dayOf({clock})+' lúc '+E.time(clock);
+  }
+  return '';
  }
  function venue(s){
   const id=D.places[s.at].id;
   if(!owns(venues,id))return null;
-  const spot=venues[id],others=Object.keys(creators).filter(name=>name!==spot.host);
-  const partner=s.social.partner;
-  return {...spot,id,guests:[spot.host,partner&&partner!==spot.host?partner:others[(dayOf(s)-1)%others.length]]};
+  const swimmers=bathing(s);
+  const guests=Object.keys(creators).filter(key=>where(key,s.clock)===id&&!swimmers.includes(key));
+  return {...venues[id],id,guests};
  }
- const contact=(s,id)=>s.social.contacts[id]??{bond:0,done:{},affection:0,dates:0};
- const romanticKeys=new Set(['flirt','date','confess','proposal','wedding','planFamily','pauseFamily','private','later','breakup']);
- const privateOffer=(s,id)=>s.social.partner===id&&s.social.privateDay===dayOf(s);
+ const contact=(s,id)=>s.social.contacts[id]??{bond:0,done:{},affection:0,dates:0,relationship:null,open:false,planFamily:false,privateDay:0};
+ const romanticKeys=new Set(['flirt','date','confess','discussOpen','proposal','wedding','planFamily','pauseFamily','private','later','breakup']);
+ const otherRelationships=(s,id)=>Object.entries(s.social.contacts).filter(([key,person])=>key!==id&&person.relationship);
  function visible(s,id,key){
   if(!romanticKeys.has(key))return true;
   if(!adultPartner(id))return false;
-  const {partner,union,planFamily,family}=s.social;
-  if(key==='breakup')return partner===id;
-  if(key==='confess')return !partner;
-  if(key==='proposal')return partner===id&&!union;
-  if(key==='wedding')return partner===id&&union==='engaged';
-  if(key==='planFamily')return partner===id&&union==='married'&&!planFamily&&!family;
-  if(key==='pauseFamily')return partner===id&&planFamily;
-  if(key==='private'||key==='later')return privateOffer(s,id);
-  return !partner||partner===id;
+  const person=contact(s,id),{relationship,open,planFamily}=person;
+  if(key==='breakup')return Boolean(relationship);
+  if(key==='confess')return !relationship;
+  if(key==='discussOpen')return !open;
+  if(key==='proposal')return relationship==='dating';
+  if(key==='wedding')return relationship==='engaged';
+  if(key==='planFamily')return relationship==='married'&&!planFamily&&!s.social.family;
+  if(key==='pauseFamily')return planFamily;
+  if(key==='private'||key==='later')return Boolean(relationship)&&person.privateDay===dayOf(s);
+  return true;
  }
  function requirements(s,id,key){
   const act=actions[key],person=contact(s,id);
-  if(person.bond<(act.min??0))return 'Cần thân thiết '+act.min;
+  const min=key==='discussOpen'?creators[id].openAt??act.min:act.min??0;
+  if(person.bond<min)return 'Cần thân thiết '+min;
+  if(!person.relationship&&['flirt','date','confess'].includes(key)){
+   const others=otherRelationships(s,id),exclusive=others.find(([,partner])=>!partner.open);
+   if(exclusive)return 'Cần trao đổi với '+creators[exclusive[0]].name+' về hẹn hò mở';
+   if(others.length&&!person.open)return 'Hãy trao đổi với '+creators[id].name+' về hẹn hò mở';
+  }
+  if(key==='proposal'&&otherRelationships(s,id).some(([,partner])=>['engaged','married'].includes(partner.relationship)))return 'Anh đang đính hôn hoặc đã kết hôn';
   if(person.affection<(act.interest??0))return 'Cần cảm tình '+act.interest;
   if(person.dates<(act.dates??0))return 'Cần '+act.dates+' buổi hẹn';
   if(key==='wedding'&&person.done.proposal===dayOf(s))return 'Có thể tổ chức từ ngày mai';
@@ -87,6 +189,8 @@ globalThis.TripSocial=(()=>{
  }
  function banter(s,spot){
   const [a,b]=spot.guests.map(id=>creators[id].name);
+  if(!a)return 'Sân đang vắng. Khách sẽ ghé theo lịch trong ngày.';
+  if(!b)return a+' đang đi dạo quanh '+spot.name.toLowerCase()+'.';
   const day=dayOf(s),minute=s.clock%1440;
   const lines=[
    a+' hỏi '+b+' có ghé '+spot.topic+' chưa.',
@@ -112,13 +216,13 @@ globalThis.TripSocial=(()=>{
   s.clock+=act.minutes;
   if(romanticKeys.has(key)){
    if(key==='breakup'){
-    const married=s.social.union==='married';
-    s.social.partner=null;s.social.union=null;s.social.planFamily=false;s.social.privateDay=0;person.affection=0;person.dates=0;
+    const married=person.relationship==='married';
+    person.relationship=null;person.planFamily=false;person.privateDay=0;person.affection=0;person.dates=0;person.open=false;
     return 'Anh và '+name+' đã nói chuyện và quyết định '+(married?'ly hôn.':'dừng hẹn hò.');
    }
    if(key==='confess'){
     if(person.dates<2||person.affection<50||person.bond<50)return name+' nói “Em có cảm tình, nhưng muốn có thêm thời gian tìm hiểu nhau.”';
-    s.social.partner=id;
+    person.relationship='dating';
     return name+' nói “'+romance.yes+'” Cả hai đã thành một đôi.';
    }
    if(key==='flirt'||key==='date'){
@@ -126,25 +230,28 @@ globalThis.TripSocial=(()=>{
     const message=name+' nói “'+romance[key]+'”';
     if(key==='flirt')return message;
     person.dates=Math.min(999,person.dates+1);
-    if(s.social.partner===id&&person.affection>=60&&random()<.38)s.social.privateDay=dayOf(s);
+    if(person.relationship&&person.affection>=60&&random()<.38)person.privateDay=dayOf(s);
     return message;
    }
    if(key==='proposal'){
-    s.social.union='engaged';return name+' nói “'+romance.proposal+'” Cả hai đã đính hôn.';
+    person.relationship='engaged';return name+' nói “'+romance.proposal+'” Cả hai đã đính hôn.';
    }
    if(key==='wedding'){
-    s.social.union='married';return 'Anh và '+name+' đã làm lễ cưới nhỏ cùng bạn bè ở '+venue(s).name+'.';
+    person.relationship='married';return 'Anh và '+name+' đã làm lễ cưới nhỏ cùng bạn bè ở '+venue(s).name+'.';
+   }
+   if(key==='discussOpen'){
+    person.open=true;return name+' nói “Em đồng ý hẹn hò mở, miễn là mình nói rõ với những người liên quan.”';
    }
    if(key==='planFamily'){
-    s.social.planFamily=true;return name+' nói “Em cũng muốn có con. Mình cùng chuẩn bị nhé.”';
+    person.planFamily=true;return name+' nói “Em cũng muốn có con. Mình cùng chuẩn bị nhé.”';
    }
    if(key==='pauseFamily'){
-    s.social.planFamily=false;return 'Hai người thống nhất tạm hoãn chuyện có con.';
+    person.planFamily=false;return 'Hai người thống nhất tạm hoãn chuyện có con.';
    }
-   s.social.privateDay=0;
+   person.privateDay=0;
    if(key==='later')return name+' nói “Ừ, để lúc cả hai thấy thoải mái nhé.”';
-   if(s.social.planFamily&&!s.social.family&&random()<.28){
-    s.social.family={parent:id,dueAt:s.clock+266*1440,lastCare:0};s.social.planFamily=false;
+   if(person.planFamily&&!s.social.family&&random()<.28){
+    s.social.family={parent:id,dueAt:s.clock+266*1440,lastCare:0};person.planFamily=false;
     return 'Hai người đã dành thời gian riêng bên nhau. Sau đó, '+name+' báo tin hai người sắp có em bé.';
    }
    return 'Hai người đã dành thời gian riêng bên nhau.';
@@ -180,7 +287,7 @@ globalThis.TripSocial=(()=>{
   return '';
  }
  function conflict(s,spot=venue(s)){
-  if(!spot||s.social.detained||s.social.incidents[spot.id]?.day===dayOf(s))return false;
+  if(!spot?.guests.length||s.social.detained||s.social.incidents[spot.id]?.day===dayOf(s))return false;
   const afterOuting=spot.guests.some(id=>contact(s,id).done.outing===dayOf(s));
   return afterOuting||s.clock%1440>=1110;
  }
@@ -203,5 +310,5 @@ globalThis.TripSocial=(()=>{
   s.money-=fee;s.clock+=100;s.social.detained=null;
   return 'Đã giải quyết ở trạm'+(fee?' · −'+fee+'k':'')+'. Anh có thể tiếp tục chuyến đi.';
  }
- return {creators,actions,restore,venue,contact,banter,visible,requirements,available,interact,familyStatus,familyAction,conflict,resolve,settle};
+ return {creators,actions,restore,venue,appearance,bathing,contact,banter,visible,requirements,available,interact,familyStatus,familyAction,conflict,resolve,settle};
 })();

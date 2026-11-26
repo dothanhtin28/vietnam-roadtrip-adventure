@@ -30,7 +30,7 @@ let in3d=false,geographic=false,orbit=0,look=0,viewpoint=false,lastDraw=0,camera
 let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
 let walkVelocity=0;
 let openHost=null,auto=false;
-let socialGuest=null,socialScene=null,socialResponse='';
+let socialGuest=null,socialScene=null,socialResponse='',shoreVisitors=[];
 let clothingPreview=false;
 const jumpDuration=.86;
 const worldUnitsPerKmh=.44;
@@ -252,7 +252,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,shoreVisitors,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,romanceGuest:ms<(activity?.until??0)?activity.guest:null,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -489,9 +489,12 @@ function socialButton(text,click,disabled=false){
  const button=dom('button',text);button.type='button';button.disabled=disabled;button.onclick=click;
  return button;
 }
+const relationshipNames={dating:'Đang yêu',engaged:'Đã đính hôn',married:'Đã kết hôn'};
 function renderSocial(local){
  const panel=$('social-panel'),spot=S.venue(s),content=$('social-content');
- socialScene=spot&&!travel&&!cast&&!s.social.detained?spot.guests:null;
+ const atStop=!travel&&!cast&&!s.social.detained;
+ socialScene=atStop&&spot?.guests.length?spot.guests:null;
+ shoreVisitors=atStop?S.bathing(s):[];
  panel.hidden=(!local&&!s.social.detained)||!spot||Boolean(travel||cast);
  if(panel.hidden)return;
  $('social-venue').textContent=s.social.detained?'Trạm cảnh sát':spot.name;
@@ -513,6 +516,7 @@ function renderSocial(local){
   content.append(socialButton('Giải quyết ở trạm',()=>finish(S.settle(s))));
   return;
  }
+ if(!spot.guests.length)return;
  if(!spot.guests.includes(socialGuest))socialGuest=spot.guests[0];
  const selector=dom('div');selector.className='social-guests';
  for(const id of spot.guests){
@@ -521,18 +525,20 @@ function renderSocial(local){
  }
  const id=socialGuest,creator=S.creators[id],person=S.contact(s,id);
  const profile=dom('div'),portrait=dom('img'),description=dom('div');
- profile.className='social-profile';portrait.src='assets/creator-'+id+'.webp';portrait.alt=creator.name;portrait.loading='lazy';
- description.append(dom('strong',creator.name+' · '+creator.role),dom('p',creator.handle+' · Thân thiết '+person.bond+'/100'),dom('p',creator.bio));
- if(creator.romance&&(!s.social.partner||s.social.partner===id)){
-  const status=s.social.partner===id?({engaged:'Đã đính hôn',married:'Đã kết hôn'}[s.social.union]??'Đang yêu'):person.dates?'Đang tìm hiểu':'';
-  const detail=['Cảm tình '+person.affection+'/100',person.dates?person.dates+' buổi hẹn':'',status].filter(Boolean).join(' · ');
+ profile.className='social-profile';portrait.src='assets/creator-'+(creator.asset??id)+'.webp';portrait.alt=creator.name;portrait.loading='lazy';
+ if(creator.colorShift)portrait.style.filter='hue-rotate('+creator.colorShift+'deg)';
+ const familiarity=person.bond?'Thân thiết '+person.bond+'/100':'Chưa làm quen';
+ description.append(dom('strong',creator.name+' · '+creator.role),dom('p',[creator.handle,familiarity].filter(Boolean).join(' · ')),dom('p',creator.bio));
+ if(creator.romance&&person.bond){
+  const status=relationshipNames[person.relationship]??(person.dates?'Đang tìm hiểu':'');
+  const detail=['Cảm tình '+person.affection+'/100',person.dates?person.dates+' buổi hẹn':'',status,person.open?'Đồng ý hẹn hò mở':''].filter(Boolean).join(' · ');
   const relationship=dom('p',detail);relationship.className='social-relationship';description.append(relationship);
  }
  profile.append(portrait,description);
  const actions=dom('div');actions.className='social-actions';
  for(const [key,details] of Object.entries(S.actions)){
   if(!S.visible(s,id,key))continue;
-  const label=key==='outing'?spot.outing+' · '+details.cost+'k':key==='breakup'&&s.social.union==='married'?'Ly hôn':details.label;
+  const label=key==='outing'?spot.outing+' · '+details.cost+'k':key==='breakup'&&person.relationship==='married'?'Ly hôn':details.label;
   const romance=['flirt','date','confess','proposal','wedding'].includes(key);
   const animation=key==='private'?'private':romance?'romance':key==='clip'?'photo':key==='meal'?'meal':null;
   const button=socialButton(label,()=>finish(S.interact(s,id,key),animation,key==='private'?3.9:romance?3.5:2.4,romance?id:null),!S.available(s,id,key,spot));
@@ -541,7 +547,7 @@ function renderSocial(local){
  }
  content.append(selector,profile);
  if(S.visible(s,id,'private'))content.append(dom('p',creator.name+' muốn dành thời gian riêng tư cùng anh. Anh muốn ở lại không?'));
- else if(s.social.partner===id&&s.social.planFamily)content.append(dom('p','Hai người đang mong có em bé.'));
+ else if(person.planFamily)content.append(dom('p','Hai người đang mong có em bé.'));
  content.append(actions);
  if(S.conflict(s,spot)){
   const incident=dom('div'),choices=dom('div');incident.className='social-incident';choices.className='social-actions';
@@ -549,6 +555,19 @@ function renderSocial(local){
   choices.append(socialButton('Can ngăn',()=>finish(S.resolve(s,'calm'))),
    socialButton('Gây gổ',()=>{setAuto(false);finish(S.resolve(s,'fight'),'scuffle',1.35);}));
   incident.append(choices);content.append(incident);
+ }
+}
+function renderContacts(){
+ const book=$('contacts-book'),entries=Object.entries(s.social.contacts).filter(([,person])=>person.bond>0);
+ book.hidden=entries.length===0;
+ if(!entries.length)return;
+ $('contacts-title').textContent='Sổ liên lạc · '+entries.length;
+ const list=$('contacts-list');list.replaceChildren();
+ entries.sort(([a,first],[b,second])=>Number(Boolean(second.relationship))-Number(Boolean(first.relationship))||S.creators[a].name.localeCompare(S.creators[b].name,'vi'));
+ for(const [id,person] of entries){
+  const row=dom('li'),status=relationshipNames[person.relationship];
+  row.append(dom('strong',S.creators[id].name+(status?' · '+status:'')),dom('span',S.appearance(s,id)));
+  list.append(row);
  }
 }
 function renderFamily(){
@@ -574,7 +593,7 @@ function render(){
  $('mission').textContent=s.photos.length===3?'Hoàn thành bộ ảnh Hà Giang!':'Bộ ảnh Hà Giang: '+s.photos.length+'/3';
  $('party').hidden=!party.length;$('party').textContent=party.length?'Đi cùng '+party.join(' · '):'';
  $('message').textContent=showText;marker.textContent=petIcons||modes[activeMode()].icon;marker.title=modes[activeMode()].name;
- pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);renderSocial(local);renderFamily();
+ pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);renderSocial(local);renderFamily();renderContacts();
  if(travel){route(travel.plan,travel.d);supplyActions();return;}
  position(...coords(places[s.at]));
  if(s.social.detained){route(null);return;}
