@@ -7,7 +7,7 @@ Mở `index.html` sau khi pull. Game mở ở góc nhìn 3D và chạy bằng HT
 - Bấm **Q** hoặc **Quay đầu** giữa chặng, rồi giữ **W / ↑** để đi về hướng vừa quay. Khi thấy nút **Nhặt**, bấm nút đó hoặc phím **E** để lấy vật phẩm bên cạnh. Đi sát vật phẩm cũng tự nhặt.
 - Kéo ngang để xoay camera, kéo dọc hoặc bấm nút ngước nhìn và nhìn xuống để ngắm cảnh. Bấm **Tự đi** để đi một chặng. Game dừng ở điểm đến hoặc khi no bụng, nước, thể lực hay máu xuống dưới 30%. Khi đang dừng giữa chặng, có thể dùng đồ trong túi.
 - Tuyến 3D giới hạn trong đường và lề, chưa phải thế giới mở. Né đá/gỗ bằng A/D, hoặc đi thẳng và chấp nhận va chạm. Lên dốc, bị thương, đói, khát và mệt đều ảnh hưởng tốc độ.
-- Nhân vật dùng mesh 3D bo và khớp thủ tục trong `map/hiker3d.js`. Balo, dây đeo, bình nước, giày, tóc và gương mặt là hình học 3D, không dùng sprite; camera gần hơn và có độ trễ khi bám. Đi bộ, chạy nhẹ, xoay người, đứng thở, câu cá, ăn, uống, ngồi nghỉ và chụp ảnh có pose/hoạt ảnh riêng. Đây là renderer Canvas hiện tại, chưa dùng GLB hoặc skinning chuẩn glTF.
+- Khi đi bộ với bộ **Cam đường đèo**, nhân vật chính dùng rig GLB và Three.js để chuyển giữa đứng, bước và xoay. Nhịp bước lấy theo quãng đường trong cảnh. Canvas tiếp tục vẽ thế giới, trang phục khác, hoạt động đặc biệt và dùng làm phương án dự phòng trên máy thiếu WebGL. Có thể tạo lại rig và bundle từ mã nguồn bằng `npm ci` rồi `npm run build:hiker`.
 
 ## Hoạt động dọc đường
 - Nút ăn và uống trong túi có động tác riêng, kể cả khi dừng giữa chặng. Đi đường làm giảm sạch sẽ. Có thể tắm ở trạm nghỉ, hồ nhỏ ở Hà Giang, suối bên bến sông Lô hoặc ao đầu bản.

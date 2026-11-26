@@ -25,6 +25,7 @@ globalThis.WindHiker=(()=>{
   const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum','azure','gold'].includes(outfit);
   const F={...fabric,...outfits[outfit],...(hero?TripData.clothing[clothing]?.colors:null)};
   const jacket=hurt?[174,78,60]:F.jacket;
+  let joint='Spine';
   const textures=hero&&materials?new Map([
    [jacket,'shell'],[F.cuff,'shell'],[F.light,'shell'],[F.scarf,'shell'],
    [F.pants,'canvas'],[F.pantsEdge,'canvas'],[F.shoe,'leather'],[F.greenDark,'cordura'],[F.green,'cordura']
@@ -45,7 +46,7 @@ globalThis.WindHiker=(()=>{
     const u=horizontal||axis[2]>=axis[0]?0:2,v=horizontal?2:1;
     material={kind:texture,uv:q.map(p=>[p[u]*155,-p[v]*155])};
    }
-   face(q.map(world),c,clamp(lit*darken,.54,1.16),0,material);
+   face(q.map(world),c,clamp(lit*darken,.54,1.16),0,material,joint);
   }
   // Rounded ring loft, used for cloth, leather and facial planes. The shared
   // normals are averaged around each ring instead of shading boxes.
@@ -107,6 +108,7 @@ globalThis.WindHiker=(()=>{
   }
   blob([0,1.79,-.145],.235,.135,.106,F.light,10,upper,.9);
   limb(upper([0,1.92,.025]),upper([0,2.045,.033]),.099,.112,F.skin,8);
+  joint='Head';
   const yaw=pose.faceYaw, hyaw=Math.sin(yaw), hcos=Math.cos(yaw), nod=pose.lookUp;
   const head=p=>{
    const scale=hero?1.12:outfit==='child'?1.13:1;
@@ -166,6 +168,7 @@ globalThis.WindHiker=(()=>{
   limb(head([.006,2.062,.188]),head([.043,2.080,.174]),.006,.004,[132,76,61],6);
   // Moss-green rucksack with a rounded sleeping roll, shoulder straps, a
   // closure flap, woven detail, buckles and a bottle in one side pocket.
+  joint='Pack';
   if(!local&&pose.washing<.25){
   const pack=p=>upper([p[0]+pose.pack*(p[1]-1.1)*.08,p[1]+pose.pack*.013,p[2]+pose.pack*.032]);
   loft([[0,1.07,-.251,.153,.092],[0,1.13,-.303,.233,.153],[0,1.37,-.324,.267,.175],[0,1.62,-.322,.259,.164],[0,1.77,-.294,.221,.131],[0,1.83,-.258,.151,.084]],F.greenDark,12,pack);
@@ -205,14 +208,18 @@ globalThis.WindHiker=(()=>{
   for(const side of [-1,1]){
    const index=side===1?1:0;
    const [hip,knee,ankle]=pose.legs[index];
-   limb(hip,knee,.150,.118,F.pants,9);limb(knee,ankle,.116,.079,F.pants,9);
+   const sideName=index?'Right':'Left';
+   joint=sideName+'Thigh';limb(hip,knee,.150,.118,F.pants,9);
+   joint=sideName+'Shin';limb(knee,ankle,.116,.079,F.pants,9);
    blob(knee,.118,.131,.113,hero?F.pants:F.pantsEdge,8,null,.95);
    if(hero){
+    joint=sideName+'Thigh';
     const pocket=plus(between(hip,knee,.37),[side*.12,0,.012]);
     blob(pocket,.054,.15,.104,F.pantsEdge,8);
     blob(plus(pocket,[side*.018,.093,0]),.038,.035,.110,F.pants,8);
-    limb(between(knee,ankle,.73),between(knee,ankle,.88),.086,.084,F.pantsEdge,9);
+    joint=sideName+'Shin';limb(between(knee,ankle,.73),between(knee,ankle,.88),.086,.084,F.pantsEdge,9);
    }
+   joint=sideName+'Foot';
    const [x,y,z]=ankle;
    const pitch=pose.feet[index],sin=Math.sin(pitch),cos=Math.cos(pitch);
    const rotateBoot=([a,b,c])=>[a,y+(b-y)*cos+(c-z)*sin,z+(c-z)*cos-(b-y)*sin];
@@ -223,8 +230,10 @@ globalThis.WindHiker=(()=>{
   }
   const arms=pose.arms.map(a=>a.map(upper));
   arms.forEach(([shoulder,elbow,hand],i)=>{
+   joint=(i?'Right':'Left')+'UpperArm';
    blob(shoulder,.142,.166,.147,jacket,8);
    limb(shoulder,elbow,.139,.105,jacket,9);
+   joint=(i?'Right':'Left')+'Forearm';
    if(hero){
     const sleeve=between(elbow,hand,.39);
     limb(elbow,sleeve,.107,.090,jacket,9);
@@ -241,6 +250,7 @@ globalThis.WindHiker=(()=>{
    const end=plus(hand,[0,-.053,.009]);blob(end,.063,.084,.060,F.skin,8);
    blob(plus(end,[i?-.045:.045,.014,.035]),.028,.052,.033,F.skin,6);
   });
+  joint='Spine';
   const act=pose.action,hand=arms[1][2],left=arms[0][2];
   function camera(center,transform=p=>p){
    blob(center,.135,.077,.060,F.hair,10,transform);

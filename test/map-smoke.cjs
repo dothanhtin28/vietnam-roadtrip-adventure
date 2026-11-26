@@ -423,5 +423,7 @@ assert.equal(get('clean').value,88);
 hold('w',24);assert.equal(sceneFrame.d,0);
 const still=sceneFrame.clock;tick(190);
 assert(sceneFrame.clock>still,'NPC time must pass while the player stands still');
+const lateFrame=sceneFrame.clock;frame(now+=7201);
+assert(sceneFrame.clock>=lateFrame+3,'Elapsed time should survive a delayed animation frame');
 assert(sceneFrame.roadGuests.every(guest=>guest.from!==guest.to));
 console.log('OK: manual and auto travel, nearby pickup, U-turns, impact and dodge, actions, vehicles and saves.');

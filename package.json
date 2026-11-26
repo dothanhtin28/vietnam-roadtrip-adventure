@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.cjs",
+    "build:hiker": "node tools/build-hiker.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "three": "0.160.1"
+  }
+}

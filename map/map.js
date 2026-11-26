@@ -651,14 +651,13 @@ function renderFamily(){
  },family.cared));
 }
 let idleElapsed=0,lastSocietyMinute=-1,lastSocialView='';
-function advanceSociety(dt){
- if(!motion&&!jump){
-  idleElapsed+=dt;
-  if(idleElapsed>=2.4){
-   idleElapsed-=2.4;
-   if(travel)travel.roadMinutes+=1;
-   else{s.clock+=1;save();}
-  }
+function advanceSociety(elapsed){
+ idleElapsed+=elapsed;
+ const minutes=Math.floor(idleElapsed/2.4);
+ if(minutes){
+  idleElapsed-=minutes*2.4;
+  if(travel)travel.roadMinutes+=minutes;
+  else{s.clock+=minutes;save();}
  }
  const minute=Math.floor(gameClock());
  if(minute===lastSocietyMinute)return;
@@ -755,7 +754,7 @@ function render(){
  if(E.needsRescue(s))action('Gọi hỗ trợ đường xa',()=>{if(E.rescue(s)){say('Được tiếp tế đủ đi bộ tới trạm gần nhất. Mất hai giờ.');save();render();}});
 }
 function loop(ms){
- const dt=Math.min(.075,Math.max(0,(ms-(last||ms))/1000));last=ms;
+ const elapsed=Math.max(0,(ms-(last||ms))/1000),dt=Math.min(.075,elapsed);last=ms;
  if(auto&&belowAutoThreshold()){setAuto(false);walkVelocity=0;steerPose=0;say('Đã dừng tự đi: có chỉ số dưới 30%. Dùng đồ tiếp tế trong túi.');}
  const manual=Number(pressing('forward'))-Number(pressing('back'));
  const privateScene=ms<(activity?.until??0)&&activity.kind==='private';
@@ -848,7 +847,7 @@ function loop(ms){
   if(age>=2450){cast=null;say(E.catchFish(s,Infinity));save();render();}
   else if(age>=1250&&!cast.phase){cast.phase=1;say('● Phao chìm! Bấm Giật cần ngay.');}
  }
- advanceSociety(dt);
+ advanceSociety(actualSpeed?elapsed-dt:elapsed);
  if(ms-(lastStats||0)>90){updateStats();lastStats=ms;}
  drawScene(ms);
  requestAnimationFrame(loop);

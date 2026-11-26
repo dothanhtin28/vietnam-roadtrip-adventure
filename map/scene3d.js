@@ -169,6 +169,7 @@ function attach(canvas){
  let angle=null,camera=null,cameraLook=null,lastFrame=null,actorYaw=null,actorPosition=null,yawVelocity=0,zoom=1,wheelAngle=0,wet=null,rain=null,heat=null,dark=null;
  let densityScale=1,frameAverage=.025,qualityCheck=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
+ const hikerMotion=globalThis.TrailHikerMotion?.create();
  const npcRoutes=new Map(),npcRigs=new Map();
  let npcClock=null;
  const image=src=>{
@@ -351,6 +352,22 @@ function attach(canvas){
   }
   function heroFace(points,color,light,_bias,material){
    face(points,color,light,-1.8,heroPatterns[material?.kind],material,1,true);
+  }
+  let actorRenderer='canvas';
+  function projectHiker(scale,grade,footing){
+   if(!hikerMotion||!ctx.drawImage)return false;
+   const ground=add(pos,0,footing,0),[x,y,z]=tr(ground),[topX,topY,topDepth]=tr(add(ground,0,2.65*scale,0));
+   if(Math.min(z,topDepth)<near||z>130)return false;
+   const center=W*.5+x*focal/z,headCenter=W*.5+topX*focal/topDepth,radius=1.03*scale*focal/Math.min(z,topDepth);
+   const left=cap(Math.floor(Math.min(center,headCenter)-radius),0,W),right=cap(Math.ceil(Math.max(center,headCenter)+radius),0,W);
+   const top=cap(Math.floor(horizon-topY*focal/topDepth-radius*.34),0,H),bottom=cap(Math.ceil(horizon-y*focal/z+radius*.56),0,H);
+   const bounds={left,top,width:right-left,height:bottom-top};
+   const sprite=hikerMotion.render({cam,pos:ground,cameraAxes:{fx,fz,cp,sp},heading,scale,grade,dt,seconds,moving,distance,turnDelta,reduced,
+    bounds,canvasWidth:W,canvasHeight:H,horizon,focal});
+   if(!sprite)return false;
+   actorRenderer='webgl';
+   faces.push({sprite,...bounds,sway:0,opacity:1,layer,depth:z-1.8});
+   return true;
   }
   function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1,colorShift=0}={}){
    if(!bitmap?.naturalWidth)return false;
@@ -717,8 +734,11 @@ function attach(canvas){
    const grade=washing?0:E.grade(route,d)*Math.cos(direction-heading);
    const footing=mode==='walk'?.14:0;
    const lift=E.jumpHeight(jump);
-   WindHiker.draw(heroFace,([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage,undefined,actorOptions);
+   if(mode!=='walk'||clothing!=='trail'||action||damage||jump!==null||!projectHiker(scale,grade,footing)){
+    WindHiker.draw(heroFace,([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage,undefined,actorOptions);
+   }
   }
+  if(canvas.dataset&&canvas.dataset.characterRenderer!==actorRenderer)canvas.dataset.characterRenderer=actorRenderer;
   if(companion&&mode==='walk'){
    const trail=E.sample(route,d-viewDirection*3.4);
    const companionPos=shift(trail,-2.1,.14,d<3.4?-1.6:0);
@@ -910,7 +930,7 @@ function attach(canvas){
    ctx.fillText(caption,W*.5,top+18);
   }
  };
- return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;npcClock=null;npcRigs.clear();actor.reset();follower.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;npcClock=null;npcRigs.clear();actor.reset();follower.reset();hikerMotion?.reset();}};
 }
 return {attach,land};
 })();
