@@ -177,11 +177,10 @@ function attach(canvas){
  const creatorImages=Object.fromEntries(Object.keys(globalThis.TripSocial?.creators??{}).map(id=>[id,image('assets/creator-'+id+'.webp')]));
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
- const heroImages=Object.fromEntries(['shell','canvas','leather','cordura','backpack'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
- const photoSurface=kind=>kind==='backpack';
+ const heroImages=Object.fromEntries(['shell','canvas','leather','cordura'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing,clothingPreview=false,socialGuests=null,detained=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,detained=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
@@ -206,7 +205,7 @@ function attach(canvas){
   actorYaw=angular(actorYaw,facing+(mode==='walk'?0:steer*.31),1-Math.exp(-dt*10));
   const heading=actorYaw,fx=Math.sin(angle),fz=Math.cos(angle),rx=fz,rz=-fx;
   const follow=clothingPreview?4.9:viewpoint?-27:mode==='cart'?13:mode==='car'?10.1:mode==='walk'?8.65:8.6;
-  const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(clothingPreview?2.24:viewpoint?11:mode==='cart'?4.25:mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
+  const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(clothingPreview?2.32:viewpoint?11:mode==='cart'?4.25:mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
   want.h=Math.max(want.h,land(want.x,want.z)+1.8);
   if(!camera||Math.hypot(want.x-camera.x,want.z-camera.z)>24)camera=want;
   else{const a=1-Math.exp(-dt*12);camera={x:mix(camera.x,want.x,a),h:mix(camera.h,want.h,a*.82),z:mix(camera.z,want.z,a)};}
@@ -281,12 +280,10 @@ function attach(canvas){
   if(!grassPattern&&grass?.naturalWidth)grassPattern=ctx.createPattern(grass,'repeat');
   if(!dirtPattern&&dirt?.naturalWidth)dirtPattern=ctx.createPattern(dirt,'repeat');
   for(const [kind,bitmap] of Object.entries(heroImages)){
-   if(!heroPatterns[kind]&&bitmap?.naturalWidth)heroPatterns[kind]=ctx.createPattern(bitmap,photoSurface(kind)?'no-repeat':'repeat');
+   if(!heroPatterns[kind]&&bitmap?.naturalWidth)heroPatterns[kind]=ctx.createPattern(bitmap,'repeat');
   }
-  const towardCamera=(cam.x-pos.x)*Math.sin(heading)+(cam.z-pos.z)*Math.cos(heading);
-  const view=cap(towardCamera/Math.max(1,Math.hypot(cam.x-pos.x,cam.z-pos.z)),-1,1);
-  const actorOptions={clothing,materials:Boolean(heroPatterns.shell),closeup:clothingPreview,packPhoto:Boolean(heroPatterns.backpack)&&view<-.66};
-  function face(points,c,shade=1,bias=0,pattern=null,material=null,coverage=1){
+  const actorOptions={clothing,materials:Boolean(heroPatterns.shell),closeup:clothingPreview};
+  function face(points,c,shade=1,bias=0,pattern=null,material=null,coverage=1,closeMesh=false){
    const ps=points.map(tr);if(ps.every(v=>v[2]<near)||ps.every(v=>v[2]>385))return;
    if(pattern)ps.forEach((p,i)=>{
     const uv=material?.uv[i];
@@ -308,17 +305,11 @@ function attach(canvas){
    if(screen.every(p=>p[0]<-4)||screen.every(p=>p[0]>W+4)||screen.every(p=>p[1]<-4)||screen.every(p=>p[1]>H+4))return;
    const opacity=layer===0&&panorama?.naturalWidth&&!viewpoint?coverage*(1-cap((depth-75)/175,0,.87)):coverage;
    faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',
-    depth:depth+bias,layer,opacity,pattern,material:material?.kind,
+    depth:depth+bias,layer,opacity,pattern,material:material?.kind,closeMesh,
     uv:pattern?clipped.map(p=>[p[3],p[4]]):null});
   }
   function heroFace(points,color,light,_bias,material){
-   const kind=material?.kind,pattern=heroPatterns[kind];
-   if(photoSurface(kind)){
-    if(!pattern)return;
-    const bitmap=heroImages[kind];
-    material={kind,uv:material.uv.map(([x,y])=>[x*bitmap.naturalWidth,y*bitmap.naturalHeight])};
-   }
-   face(points,color,light,-1.8,pattern,material);
+   face(points,color,light,-1.8,heroPatterns[material?.kind],material,1,clothingPreview);
   }
   function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1}={}){
    if(!bitmap?.naturalWidth)return false;
@@ -616,7 +607,7 @@ function attach(canvas){
     box(shift(pos,0,0,.79),.69,.077,.074,heading,[75,81,65],1.11,-1.5);
    }
    const scale=mode==='walk'?1.20:1;
-   const pose=actor.pose({moving,mode,speed,actualSpeed,distance,scale,jump,seconds,dt,action,actionTime,turn:steer,reduced,trekking:true});
+   const pose=actor.pose({moving,mode,speed,actualSpeed,distance,scale,jump,seconds,dt,action,actionTime,turn:steer,reduced,trekking:clothing!=='trail'});
    const grade=E.grade(route,d)*Math.cos(direction-heading);
    const footing=mode==='walk'?.14:0;
    const lift=E.jumpHeight(jump);
@@ -709,14 +700,13 @@ function attach(canvas){
    const determinant=du1*dv2-du2*dv1;
    if(Math.abs(determinant)<.01)return;
    const screenArea=Math.abs((x1-x0)*(y2-y0)-(x2-x0)*(y1-y0));
-   if(f.material&&!photoSurface(f.material)&&screenArea<(clothingPreview?22:57))return;
+   if(f.material&&screenArea<(clothingPreview?22:57))return;
    const ax=((x1-x0)*dv2-(x2-x0)*dv1)/determinant;
    const ay=((y1-y0)*dv2-(y2-y0)*dv1)/determinant;
    const bx=(du1*(x2-x0)-du2*(x1-x0))/determinant;
    const by=(du1*(y2-y0)-du2*(y1-y0))/determinant;
    ctx.save();
-   if(photoSurface(f.material))ctx.globalAlpha=1;
-   else if(f.material)ctx.globalAlpha=.8;
+   if(f.material)ctx.globalAlpha=.8;
    else ctx.globalAlpha=cap((48-f.depth)/22,0,.82)*(f.layer===1?1-wet*.60:1);
    ctx.transform(ax,ay,bx,by,x0-ax*u0-bx*v0,y0-ay*u0-by*v0);
    ctx.fillStyle=f.pattern;ctx.fill();
@@ -741,12 +731,11 @@ function attach(canvas){
    ctx.beginPath();ctx.moveTo(...f.screen[0]);
    for(let i=1;i<f.screen.length;i++)ctx.lineTo(...f.screen[i]);
    ctx.closePath();ctx.fillStyle=f.color;
-   if(photoSurface(f.material)){drawMaterial(f);continue;}
    if(f.opacity<1){
     ctx.globalAlpha=f.opacity;ctx.fill();ctx.globalAlpha=1;
    }else{
     ctx.fill();
-    if(f.layer<=1.5){ctx.strokeStyle=f.color;ctx.lineWidth=.53;ctx.stroke();}
+    if(f.layer<=1.5||f.closeMesh){ctx.strokeStyle=f.color;ctx.lineWidth=f.closeMesh?.70:.53;ctx.stroke();}
    }
    if(f.pattern)drawMaterial(f);
   }

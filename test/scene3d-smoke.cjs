@@ -62,9 +62,16 @@ Rig.draw((vertices,color,light,bias,material)=>{
  check(...vertices.flat(),light,bias);
  heroColors.add(color.join(','));
  if(material){assert.equal(material.uv.length,vertices.length);check(...material.uv.flat());surfaceKinds.add(material.kind);}
-},v=>v,tank,'walk',false,undefined,{clothing:'indigo',materials:true,packPhoto:true});
-assert.deepEqual([...surfaceKinds].sort(),['backpack','canvas','cordura','leather','shell']);
+},v=>v,tank,'walk',false,undefined,{clothing:'indigo',materials:true});
+assert.deepEqual([...surfaceKinds].sort(),['canvas','cordura','leather','shell']);
 assert(heroColors.has('69,88,115'),'The selected jacket palette should reach the player mesh');
+const defaultColors=new Set();
+Rig.draw((vertices,color)=>{
+ check(...vertices.flat());
+ defaultColors.add(color.join(','));
+},v=>v,tank,'walk',false,undefined,{closeup:true});
+assert(defaultColors.has('218,113,29'),'The default hiker wears the reference orange jacket');
+assert(defaultColors.has('43,64,70'),'The chest camera has a modeled glass lens');
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
 for(const action of ['fish','reel','meal','drink','rest','photo']){
  rig.reset();

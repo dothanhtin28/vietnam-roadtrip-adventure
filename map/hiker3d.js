@@ -19,35 +19,28 @@ globalThis.WindHiker=(()=>{
   child:{jacket:[216,148,64],light:[242,183,87],pants:[62,92,110],cuff:[160,103,53]}
  };
  const rings=Array.from({length:15},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
- function draw(face,world,pose,mode,hurt=false,outfit,{clothing,materials=false,packPhoto=false,closeup=false}={}){
+ function draw(face,world,pose,mode,hurt=false,outfit,{clothing='trail',materials=false,closeup=false}={}){
   const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum','azure','gold'].includes(outfit);
   const F={...fabric,...outfits[outfit],...(hero?TripData.clothing[clothing]?.colors:null)};
-  const jacket=hurt?[174,78,60]:F.jacket,khaki=[139,128,101];
+  const jacket=hurt?[174,78,60]:F.jacket;
   const textures=hero&&materials?new Map([
    [jacket,'shell'],[F.cuff,'shell'],[F.light,'shell'],[F.scarf,'shell'],
-   [F.pants,'canvas'],[F.pantsEdge,'canvas'],[khaki,'canvas'],[F.shoe,'leather'],[F.greenDark,'cordura'],[F.green,'cordura']
+   [F.pants,'canvas'],[F.pantsEdge,'canvas'],[F.shoe,'leather'],[F.greenDark,'cordura'],[F.green,'cordura']
   ]):null;
   const tilt=pose.lean, slant=(p)=>{
    const y=p[1]-1.14,roll=pose.roll;return [p[0]*Math.cos(roll)+y*Math.sin(roll),1.14+y*Math.cos(roll)-p[0]*Math.sin(roll)+pose.bob,p[2]+y*tilt];
   };
-  function emit(q,c,darken=1,normal=null,material=null){
+  function emit(q,c,darken=1,normal=null){
    const n=normal??unit(cross(sub(q[1],q[0]),sub(q[2],q[0])));
    const lit=(hero?.73:.70)+Math.max(0,dot(n,sun))*.36+Math.max(0,n[1])*.08;
    const texture=textures?.get(c);
-   if(!material&&texture){
+   let material=null;
+   if(texture){
     const axis=n.map(Math.abs),horizontal=axis[1]>axis[0]&&axis[1]>axis[2];
     const u=horizontal||axis[2]>=axis[0]?0:2,v=horizontal?2:1;
     material={kind:texture,uv:q.map(p=>[p[u]*155,-p[v]*155])};
    }
    face(q.map(world),c,clamp(lit*darken,.54,1.16),0,material);
-  }
-  function decal(kind,point,color,normal,columns,rows){
-   for(let y=0;y<rows;y++)for(let x=0;x<columns;x++){
-    const u=x/columns,v=y/rows,right=(x+1)/columns,bottom=(y+1)/rows;
-    const a=point(u,v),b=point(u,bottom),c=point(right,bottom),d=point(right,v);
-    emit([a,b,c],color,1,normal,{kind,uv:[[u,v],[u,bottom],[right,bottom]]});
-    emit([a,c,d],color,1,normal,{kind,uv:[[u,v],[right,bottom],[right,v]]});
-   }
   }
   // Rounded ring loft, used for cloth, leather and facial planes. The shared
   // normals are averaged around each ring instead of shading boxes.
@@ -94,14 +87,24 @@ globalThis.WindHiker=(()=>{
    [0,1.68,.012,.352,.201],[0,1.77,.014,.368,.193],[0,1.84,.012,.326,.175],[0,1.96,.016,.151,.133]],jacket,12,upper);
   loft([[0,1.075,.008,.285,.170],[0,1.11,.008,.299,.178],[0,1.15,.008,.298,.176]],F.cuff,10,upper,.92);
   // Zip, storm collar and chest patch.
-  limb(upper([0,1.15,.179]),upper([0,1.91,.158]),.014,.013,F.trim,6);
+  if(hero){
+   emit([upper([-.093,1.13,.183]),upper([.097,1.13,.183]),upper([.065,1.58,.208]),upper([.11,1.88,.177]),upper([-.105,1.88,.177]),upper([-.055,1.58,.208])],[184,149,101],1,[0,0,1]);
+   for(const side of [-1,1]){
+    limb(upper([side*.103,1.15,.188]),upper([side*.066,1.58,.219]),.012,.009,F.trim,6);
+    limb(upper([side*.068,1.58,.218]),upper([side*.110,1.87,.188]),.009,.010,F.trim,6);
+   }
+  }else limb(upper([0,1.15,.179]),upper([0,1.91,.158]),.014,.013,F.trim,6);
   blob([.155,1.61,.180],.072,.075,.029,F.light,6,upper);
   loft([[0,1.875,.016,.153,.143],[0,1.928,.025,.170,.150],[0,1.972,.034,.139,.123]],F.scarf,10,upper);
+  if(hero){
+   limb(upper([-.126,1.938,.088]),upper([.123,1.854,.167]),.047,.037,F.scarf,9);
+   limb(upper([.104,1.899,.105]),upper([-.097,1.864,.166]),.039,.035,F.scarf,9);
+  }
   blob([0,1.79,-.145],.235,.135,.106,F.light,10,upper,.9);
   limb(upper([0,1.92,.025]),upper([0,2.045,.033]),.099,.112,F.skin,8);
   const yaw=pose.faceYaw, hyaw=Math.sin(yaw), hcos=Math.cos(yaw), nod=pose.lookUp;
   const head=p=>{
-   const scale=hero?1.035:outfit==='child'?1.13:1;
+   const scale=hero?1.12:outfit==='child'?1.13:1;
    const x=p[0]*scale,y=(p[1]-1.99)*scale-.19,z=(p[2]-.05)*scale;
    return upper([x*hcos+z*hyaw,2.18+y*Math.cos(nod)+z*Math.sin(nod),.05+z*hcos-x*hyaw]);
   };
@@ -112,9 +115,31 @@ globalThis.WindHiker=(()=>{
   blob([-.075,2.33,.118],.143,.071,.107,F.hair,10,head);
   blob([.069,2.31,.122],.116,.048,.099,F.hair,8,head);
   if(hero){
-   loft([[0,2.325,-.023,.218,.188],[0,2.38,-.025,.222,.187],[0,2.44,-.025,.182,.158],[0,2.49,-.04,.094,.101],[0,2.503,-.048,.035,.043]],khaki,12,head);
-   loft([[0,2.308,.14,.179,.171],[0,2.329,.142,.20,.186],[0,2.357,.123,.207,.172]],khaki,12,head,.89);
-   blob([0,2.406,.139],.060,.025,.012,[193,163,98],8,head);
+   const locks=[
+    [[-.14,2.23,.105],[-.194,2.34,.117],[-.238,2.39,.102],.047],
+    [[-.12,2.32,.137],[-.167,2.433,.134],[-.238,2.431,.109],.066],
+    [[-.071,2.37,.08],[-.125,2.473,.095],[-.184,2.494,.049],.076],
+    [[-.016,2.38,.034],[.004,2.478,.051],[-.094,2.520,.009],.084],
+    [[.057,2.388,.022],[.115,2.468,.037],[.069,2.527,-.025],.068],
+    [[.126,2.362,.048],[.176,2.423,.083],[.211,2.453,.039],.056],
+    [[.175,2.294,.099],[.204,2.367,.094],[.245,2.387,.030],.052],
+    [[.069,2.366,.141],[.017,2.367,.187],[-.082,2.285,.191],.052],
+    [[.144,2.344,.123],[.172,2.341,.175],[.096,2.276,.195],.051]
+   ];
+   for(const [i,[a,b,c,width]] of locks.entries()){
+    const shade=i%3===0?[58,41,32]:F.hair;
+    const points=closeup?[a,between(a,b,.65),b,between(b,c,.65),c]:[a,b,c];
+    const radii=closeup?[width*.58,width,width*.79,width*.42,.003]:[width*.65,width*.83,.003],sides=closeup?7:5;
+    const rows=points.map((p,k)=>{
+     const tangent=unit(sub(points[Math.min(points.length-1,k+1)],points[Math.max(0,k-1)]));
+     const normal=unit(cross(tangent,[0,0,1])),depth=cross(tangent,normal);
+     return rings[sides].map(([x,y])=>head(plus(p,plus(times(normal,x*radii[k]),times(depth,y*radii[k]*.68)))));
+    });
+    for(let k=1;k<rows.length;k++)for(let j=0;j<sides;j++){
+     const n=(j+1)%sides;
+     emit([rows[k-1][j],rows[k-1][n],rows[k][n],rows[k][j]],shade,.90+.035*j);
+    }
+   }
   }
   if(feminine){
    blob([0,2.18,-.157],.123,.109,.076,F.hair,10,head);
@@ -123,31 +148,45 @@ globalThis.WindHiker=(()=>{
   }
   for(const sign of [-1,1]){
    const x=.071*sign, blink=pose.blink;
-   blob([x,2.187,.195],hero?.027:.034,(hero?.017:.026)*blink,.009,F.white,6,head);
-   blob([x+.004,2.188,.204],hero?.012:.015,(hero?.014:.020)*blink,.006,[39,38,31],6,head);
-   limb(head([x-.025,2.234,.186]),head([x+.025,2.24,.18]),.011,.010,F.hair,6);
+   blob([x,2.187,.195],hero?.032:.034,(hero?.024:.026)*blink,.010,F.white,hero?8:6,head);
+   blob([x+.004,2.188,.204],hero?.018:.015,(hero?.018:.020)*blink,.007,hero?[103,64,38]:[39,38,31],hero?8:6,head);
+   if(hero){
+    blob([x+.005,2.187,.211],.010,.013*blink,.005,[41,30,24],6,head);
+    blob([x+.001,2.194,.217],.004,.004*blink,.003,F.white,6,head);
+   }
+   limb(head([x-.029,2.234,.186]),head([x+.028,2.24,.18]),.013,.010,F.hair,6);
   }
   blob([0,2.132,.212],.034,.041,.030,F.skin,8,head);
-  limb(head([-.034,2.072,.175]),head([.006,2.062,.188]),.005,.006,[132,76,61],6);
-  limb(head([.006,2.062,.188]),head([.042,2.075,.174]),.006,.004,[132,76,61],6);
+  limb(head([-.038,2.076,.175]),head([.006,2.062,.188]),.005,.006,[132,76,61],6);
+  limb(head([.006,2.062,.188]),head([.043,2.080,.174]),.006,.004,[132,76,61],6);
   // Moss-green rucksack with a rounded sleeping roll, shoulder straps, a
   // closure flap, woven detail, buckles and a bottle in one side pocket.
   if(!local){
   const pack=p=>upper([p[0]+pose.pack*(p[1]-1.1)*.08,p[1]+pose.pack*.013,p[2]+pose.pack*.032]);
   loft([[0,1.07,-.251,.153,.092],[0,1.13,-.303,.233,.153],[0,1.37,-.324,.267,.175],[0,1.62,-.322,.259,.164],[0,1.77,-.294,.221,.131],[0,1.83,-.258,.151,.084]],F.greenDark,12,pack);
-  if(hero&&packPhoto){
-   const panel=(x,y)=>pack([(x-.5)*.457,1.827-y*.728,-.546]);
-   decal('backpack',panel,F.green,[0,0,-1],1,4);
-  }else{
-   loft([[0,1.24,-.426,.123,.057],[0,1.30,-.447,.203,.088],[0,1.47,-.448,.207,.077],[0,1.55,-.420,.170,.053]],F.green,10,pack);
-   blob([0,1.684,-.449],.209,.092,.086,[129,134,81],10,pack);
-   limb(pack([-.257,1.81,-.323]),pack([.257,1.81,-.323]),.103,.103,[159,142,96],10);
-   for(const x of [-.182,.182]){
-    limb(pack([x,1.73,-.486]),pack([x,1.37,-.516]),.023,.028,F.strap,6);
-    limb(pack([x-.026,1.575,-.521]),pack([x+.026,1.575,-.521]),.028,.028,F.metal,6);
-   }
-   emit([pack([-.065,1.402,-.529]),pack([-.026,1.462,-.531]),pack([.005,1.431,-.529]),pack([.029,1.455,-.528]),pack([.075,1.401,-.527])],F.trim,1.04,[0,0,-1]);
+  loft([[0,1.24,-.426,.123,.057],[0,1.30,-.447,.203,.088],[0,1.47,-.448,.207,.077],[0,1.55,-.420,.170,.053]],F.green,10,pack);
+  blob([0,1.684,-.449],.209,.092,.086,[129,134,81],10,pack);
+  if(hero)limb(pack([-.265,1.874,-.345]),pack([.265,1.874,-.345]),.121,.121,F.green,11);
+  else limb(pack([-.257,1.81,-.323]),pack([.257,1.81,-.323]),.103,.103,[159,142,96],10);
+  for(const x of [-.180,.180]){
+   limb(pack([x,1.73,-.486]),pack([x,1.37,-.516]),.023,.028,F.strap,6);
+   limb(pack([x-.026,1.575,-.521]),pack([x+.026,1.575,-.521]),.028,.028,F.metal,6);
+   if(hero)limb(pack([x-.015,1.879,-.462]),pack([x+.015,1.879,-.462]),.029,.029,F.strap,6);
   }
+  if(hero){
+   for(const side of [-1,1]){
+    const rollFace=(r,a)=>pack([side*.265,1.874+Math.cos(a)*r,-.345+Math.sin(a)*r]);
+    for(let i=0;i<10;i++){
+     const a=i*TAU/10,b=(i+1)*TAU/10;
+     emit([rollFace(.080,a),rollFace(.080,b),rollFace(.068,b),rollFace(.068,a)],F.greenDark,.86,[side,0,0]);
+    }
+   }
+   for(const x of [-.12,.13]){
+    emit([pack([x-.067,1.285,-.533]),pack([x+.067,1.285,-.533]),pack([x+.064,1.396,-.530]),pack([x-.064,1.396,-.530])],F.greenDark,1.02,[0,0,-1]);
+    blob([x,1.384,-.545],.018,.015,.009,F.trim,6,pack);
+   }
+  }
+  emit([pack([-.065,1.402,-.529]),pack([-.026,1.462,-.531]),pack([.005,1.431,-.529]),pack([.029,1.455,-.528]),pack([.075,1.401,-.527])],F.trim,1.04,[0,0,-1]);
   for(const x of [-.182,.182]){
    limb(upper([x,1.14,.156]),upper([x,1.75,.199]),.040,.046,F.strap,6);
    limb(upper([x,1.75,.199]),upper([x,1.855,-.119]),.046,.040,F.strap,6);
@@ -163,22 +202,54 @@ globalThis.WindHiker=(()=>{
    const [hip,knee,ankle]=pose.legs[index];
    limb(hip,knee,.150,.118,F.pants,9);limb(knee,ankle,.116,.079,F.pants,9);
    blob(knee,.118,.131,.113,hero?F.pants:F.pantsEdge,8,null,.95);
+   if(hero){
+    const pocket=plus(between(hip,knee,.37),[side*.12,0,.012]);
+    blob(pocket,.054,.15,.104,F.pantsEdge,8);
+    blob(plus(pocket,[side*.018,.093,0]),.038,.035,.110,F.pants,8);
+    limb(between(knee,ankle,.73),between(knee,ankle,.88),.086,.084,F.pantsEdge,9);
+   }
    const [x,y,z]=ankle;
    const pitch=pose.feet[index],sin=Math.sin(pitch),cos=Math.cos(pitch);
    const rotateBoot=([a,b,c])=>[a,y+(b-y)*cos+(c-z)*sin,z+(c-z)*cos-(b-y)*sin];
    loft([[x,y-.12,z+.055,.085,.168],[x,y-.105,z+.075,.116,.202],[x,y-.057,z+.075,.118,.205],[x,y-.038,z+.07,.09,.181]],F.sole,9,rotateBoot);
-   loft([[x,y-.053,z+.077,.108,.189],[x,y-.012,z+.086,.112,.188],[x,y+.056,z+.049,.103,.153],[x,y+.128,z+.015,.091,.097],[x,y+.159,z,.075,.078]],F.shoe,9,rotateBoot);
-   if(!local)for(let l=0;l<3;l++)limb(rotateBoot([x-.06,y+.049+l*.023,z+.128-l*.017]),rotateBoot([x+.06,y+.058+l*.023,z+.119-l*.017]),.010,.011,F.trim,6);
+   loft([[x,y-.053,z+.077,.108,.189],[x,y-.012,z+.086,.112,.188],[x,y+.056,z+.049,.103,.153],[x,y+.128,z+.015,.091,.097],[x,y+(hero?.204:.159),z,.078,.083]],F.shoe,9,rotateBoot);
+   if(hero)loft([[x,y+.174,z,.080,.085],[x,y+.215,z,.076,.081]],F.sole,9,rotateBoot);
+   if(!local)for(let l=0;l<(hero?4:3);l++)limb(rotateBoot([x-.06,y+.049+l*.023,z+.128-l*.017]),rotateBoot([x+.06,y+.058+l*.023,z+.119-l*.017]),.010,.011,F.trim,6);
   }
   const arms=pose.arms.map(a=>a.map(upper));
   arms.forEach(([shoulder,elbow,hand],i)=>{
    blob(shoulder,.142,.166,.147,jacket,8);
-   limb(shoulder,elbow,.139,.105,jacket,9);limb(elbow,hand,.105,.069,jacket,9);
-   limb(between(elbow,hand,.81),hand,.071,.072,F.cuff,8);
+   limb(shoulder,elbow,.139,.105,jacket,9);
+   if(hero){
+    const sleeve=between(elbow,hand,.39);
+    limb(elbow,sleeve,.107,.090,jacket,9);
+    limb(between(elbow,hand,.29),sleeve,.103,.098,F.cuff,8);
+    limb(sleeve,hand,.083,.058,F.skin,9);
+    if(i===0){
+     limb(between(elbow,hand,.84),between(elbow,hand,.94),.067,.065,F.sole,8);
+     blob(plus(between(elbow,hand,.89),[-.065,.007,0]),.024,.030,.032,F.metal,8);
+    }
+   }else{
+    limb(elbow,hand,.105,.069,jacket,9);
+    limb(between(elbow,hand,.81),hand,.071,.072,F.cuff,8);
+   }
    const end=plus(hand,[0,-.053,.009]);blob(end,.063,.084,.060,F.skin,8);
    blob(plus(end,[i?-.045:.045,.014,.035]),.028,.052,.033,F.skin,6);
   });
   const act=pose.action,hand=arms[1][2],left=arms[0][2];
+  function camera(center,transform=p=>p){
+   blob(center,.135,.077,.060,F.hair,10,transform);
+   const lens=plus(center,[0,0,.036]),rim=plus(center,[0,0,.134]);
+   limb(transform(lens),transform(rim),.060,.055,[52,49,45],10);
+   limb(transform(plus(rim,[0,0,-.013])),transform(rim),.057,.056,F.metal,10);
+   blob(plus(rim,[0,0,.013]),.039,.038,.013,[43,64,70],8,transform);
+   blob(plus(rim,[-.015,.013,.025]),.012,.011,.004,[117,160,166],6,transform);
+  }
+  if(hero&&!(act==='photo'&&pose.activity>.12)){
+   const body=[pose.pack*.019,1.42+pose.pack*.008,.262];
+   for(const side of [-1,1])limb(upper([side*.101,1.918,.150]),upper([body[0]+side*.114,body[1]+.038,.258]),.011,.012,F.sole,6);
+   camera(body,upper);
+  }
   const pole=(grip,tip)=>{
    const head=plus(grip,[0,.11,0]),joint=between(grip,tip,.60);
    limb(head,between(grip,tip,.12),.039,.029,[67,58,46],8);
@@ -207,8 +278,7 @@ globalThis.WindHiker=(()=>{
     blob(plus(bowl,[0,.033,0]),.096,.036,.093,F.white,8);
     limb(hand,plus(hand,[-.09,.065,.086]),.012,.011,F.trim,6);
    }else if(act==='photo'){
-    const camera=between(left,hand,.5);blob(plus(camera,[0,.036,.033]),.142,.079,.052,F.hair,10);
-    limb(camera,plus(camera,[0,0,.121]),.057,.053,F.metal,10);
+    camera(plus(between(left,hand,.5),[0,.036,.032]));
    }
   }
  }

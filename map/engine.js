@@ -5,7 +5,7 @@ const starterClothing=Object.keys(clothing).filter(id=>!clothing[id].price);
 function wardrobe(saved){
  const previous=Array.isArray(saved?.owned)?saved.owned.filter(id=>Object.hasOwn(clothing,id)):[];
  const owned=[...new Set([...starterClothing,...previous])];
- return {owned,active:owned.includes(saved?.active)?saved.active:'moss'};
+ return {owned,active:owned.includes(saved?.active)?saved.active:'trail'};
 }
 const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],wardrobe:wardrobe(),bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
 const campingStops=new Set(['start','river','yen','dong','nho-que']);

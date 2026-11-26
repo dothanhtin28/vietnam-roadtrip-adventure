@@ -78,6 +78,7 @@ const forage={
  fruit:{name:'Trái cây rừng',icon:'🍐',food:15,water:10,price:8}
 };
 const clothing={
+ trail:{name:'Cam đường đèo',accent:'#cf721e',colors:{jacket:[218,113,29],light:[241,154,52],cuff:[166,72,25],scarf:[63,56,55],pants:[70,65,63],pantsEdge:[85,78,72],shoe:[136,89,49]}},
  moss:{name:'Xanh rêu',accent:'#596442',colors:{jacket:[93,106,67],light:[125,135,88],pants:[106,86,66],pantsEdge:[91,78,64]}},
  indigo:{name:'Chàm cao nguyên',accent:'#465872',colors:{jacket:[69,88,115],light:[96,115,138],cuff:[48,59,79],scarf:[61,78,90],pants:[90,92,83],pantsEdge:[72,77,74]}},
  ochre:{name:'Áo mưa vàng đất',price:28,accent:'#b18847',colors:{jacket:[169,126,59],light:[194,156,86],cuff:[112,83,48],scarf:[108,96,64],pants:[67,78,78],pantsEdge:[58,68,67]}},

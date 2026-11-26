@@ -11,7 +11,7 @@ Mở `index.html` sau khi pull. Game mở ở góc nhìn 3D và chạy bằng HT
 
 ## Hoạt động dọc đường
 - Ghé sân cà phê Hà Giang, phố quán Yên Minh hoặc sân chợ Đồng Văn để giao lưu với các nhà sáng tạo hư cấu. Chào hỏi, ăn cùng và đi chơi giúp tăng độ thân thiết để mở quay clip. Nếu có cãi vã, can ngăn giúp tăng uy tín. Gây gổ có thể làm chuyến đi dừng ở trạm cảnh sát.
-- Mở **Trang phục** tại điểm dừng để mặc bộ đã sở hữu hoặc xem nhân vật ở góc gần. Xanh rêu và Chàm cao nguyên có sẵn từ đầu. Hà Giang, Yên Minh và Chợ Đồng Văn có bán trang phục mới.
+- Mở **Trang phục** tại điểm dừng để mặc bộ đã sở hữu hoặc xem nhân vật ở góc gần. Cam đường đèo là bộ mặc định của chuyến mới. Xanh rêu và Chàm cao nguyên cũng có sẵn. Hà Giang, Yên Minh và Chợ Đồng Văn có bán trang phục mới.
 - Kéo để dời bản đồ. Cuộn chuột, chụm hai ngón hoặc dùng nút +/− để zoom. Nút ◎ về vị trí hiện tại, ▣ mở toàn tuyến.
 - Ghim mở thông tin điểm dừng. Có thể gõ cửa nhà dân để hỏi mua cơm nước, mua nước tăng lực ở quán hoặc thuê xe bò theo chặng tại trạm. Nấm, ngô và trái cây nhặt ven đường có thể ăn hoặc mang bán.
 - Ở các điểm nghỉ phù hợp, bấm **Tự dựng lều**. Có thể **Chờ tối ngắm sao**, ngủ đến 06:00 rồi thu lều. Nút nhạc nền và toàn màn hình nằm cạnh tiêu đề.
