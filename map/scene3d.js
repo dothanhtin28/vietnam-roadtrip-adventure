@@ -176,8 +176,8 @@ function attach(canvas){
  const house=image('assets/village-house.webp');
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
- const heroImages=Object.fromEntries(['shell','canvas','leather','cordura','backpack','head'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
- const photoSurface=kind=>kind==='head'||kind==='backpack';
+ const heroImages=Object.fromEntries(['shell','canvas','leather','cordura','backpack'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
+ const photoSurface=kind=>kind==='backpack';
  const heroPatterns={};
  let grassPattern,dirtPattern;
  const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing,clothingPreview=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
@@ -284,8 +284,7 @@ function attach(canvas){
   }
   const towardCamera=(cam.x-pos.x)*Math.sin(heading)+(cam.z-pos.z)*Math.cos(heading);
   const view=cap(towardCamera/Math.max(1,Math.hypot(cam.x-pos.x,cam.z-pos.z)),-1,1);
-  const actorOptions={clothing,materials:Boolean(heroPatterns.shell),closeup:clothingPreview,packPhoto:Boolean(heroPatterns.backpack)&&view<-.66,
-   headPhoto:Boolean(heroPatterns.head)&&view>.83};
+  const actorOptions={clothing,materials:Boolean(heroPatterns.shell),closeup:clothingPreview,packPhoto:Boolean(heroPatterns.backpack)&&view<-.66};
   function face(points,c,shade=1,bias=0,pattern=null,material=null,coverage=1){
    const ps=points.map(tr);if(ps.every(v=>v[2]<near)||ps.every(v=>v[2]>385))return;
    if(pattern)ps.forEach((p,i)=>{

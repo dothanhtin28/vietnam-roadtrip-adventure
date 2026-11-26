@@ -62,8 +62,8 @@ Rig.draw((vertices,color,light,bias,material)=>{
  check(...vertices.flat(),light,bias);
  heroColors.add(color.join(','));
  if(material){assert.equal(material.uv.length,vertices.length);check(...material.uv.flat());surfaceKinds.add(material.kind);}
-},v=>v,tank,'walk',false,undefined,{clothing:'indigo',materials:true,packPhoto:true,headPhoto:true});
-assert.deepEqual([...surfaceKinds].sort(),['backpack','canvas','cordura','head','leather','shell']);
+},v=>v,tank,'walk',false,undefined,{clothing:'indigo',materials:true,packPhoto:true});
+assert.deepEqual([...surfaceKinds].sort(),['backpack','canvas','cordura','leather','shell']);
 assert(heroColors.has('69,88,115'),'The selected jacket palette should reach the player mesh');
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
 for(const action of ['fish','reel','meal','drink','rest','photo']){

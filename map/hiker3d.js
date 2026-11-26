@@ -19,7 +19,7 @@ globalThis.WindHiker=(()=>{
   child:{jacket:[216,148,64],light:[242,183,87],pants:[62,92,110],cuff:[160,103,53]}
  };
  const rings=Array.from({length:15},(_,n)=>Array.from({length:n},(_,i)=>[Math.cos(i*TAU/n),Math.sin(i*TAU/n)]));
- function draw(face,world,pose,mode,hurt=false,outfit,{clothing,materials=false,packPhoto=false,headPhoto=false,closeup=false}={}){
+ function draw(face,world,pose,mode,hurt=false,outfit,{clothing,materials=false,packPhoto=false,closeup=false}={}){
   const local=['woman','elder','child'].includes(outfit),hero=!outfit,feminine=['woman','fern','plum','azure','gold'].includes(outfit);
   const F={...fabric,...outfits[outfit],...(hero?TripData.clothing[clothing]?.colors:null)};
   const jacket=hurt?[174,78,60]:F.jacket,khaki=[139,128,101];
@@ -105,39 +105,31 @@ globalThis.WindHiker=(()=>{
    const x=p[0]*scale,y=(p[1]-1.99)*scale-.19,z=(p[2]-.05)*scale;
    return upper([x*hcos+z*hyaw,2.18+y*Math.cos(nod)+z*Math.sin(nod),.05+z*hcos-x*hyaw]);
   };
-  if(hero&&headPhoto){
-   const frontal=(u,v)=>{
-    const across=u*2-1;
-    return head([across*.228,2.522-v*.553,.263-.11*across*across]);
-   };
-   decal('head',frontal,F.skin,[0,0,1],4,5);
-  }else{
-   loft([[0,1.98,.041,.064,.068],[0,2.01,.057,.122,.126],[0,2.08,.052,.171,.167],[0,2.18,.040,.193,.179],[0,2.29,.025,.173,.164],[0,2.37,.018,.101,.105]],F.skin,12,head);
-   for(const x of [-.185,.185]){blob([x,2.14,.025],.047,.064,.037,F.skin,8,head);blob([x*1.14,2.14,.034],.012,.036,.020,F.shade,6,head,.92);}
-   // Side-swept, angular-soft black hair. The rear fall and fringe are distinct.
-   loft([[0,2.103,-.064,.155,.090],[0,2.17,-.040,.192,.125],[0,2.235,-.024,.202,.152],[0,2.328,.004,.182,.168],[.014,2.395,.015,.127,.127],[.039,2.425,.010,.048,.068]],F.hair,12,head);
-   blob([-.075,2.33,.118],.143,.071,.107,F.hair,10,head);
-   blob([.069,2.31,.122],.116,.048,.099,F.hair,8,head);
-   if(hero){
-    loft([[0,2.325,-.023,.218,.188],[0,2.38,-.025,.222,.187],[0,2.44,-.025,.182,.158],[0,2.49,-.04,.094,.101],[0,2.503,-.048,.035,.043]],khaki,12,head);
-    loft([[0,2.308,.14,.179,.171],[0,2.329,.142,.20,.186],[0,2.357,.123,.207,.172]],khaki,12,head,.89);
-    blob([0,2.406,.139],.060,.025,.012,[193,163,98],8,head);
-   }
-   if(feminine){
-    blob([0,2.18,-.157],.123,.109,.076,F.hair,10,head);
-    limb(head([0,2.18,-.195]),upper([.09,1.83,-.255]),.071,.041,F.hair,8);
-    blob([.01,2.15,-.22],.045,.021,.042,[183,94,73],8,head);
-   }
-   for(const sign of [-1,1]){
-    const x=.071*sign, blink=pose.blink;
-    blob([x,2.187,.195],hero?.027:.034,(hero?.017:.026)*blink,.009,F.white,6,head);
-    blob([x+.004,2.188,.204],hero?.012:.015,(hero?.014:.020)*blink,.006,[39,38,31],6,head);
-    limb(head([x-.025,2.234,.186]),head([x+.025,2.24,.18]),.011,.010,F.hair,6);
-   }
-   blob([0,2.132,.212],.034,.041,.030,F.skin,8,head);
-   limb(head([-.034,2.072,.175]),head([.006,2.062,.188]),.005,.006,[132,76,61],6);
-   limb(head([.006,2.062,.188]),head([.042,2.075,.174]),.006,.004,[132,76,61],6);
+  loft([[0,1.98,.041,.064,.068],[0,2.01,.057,.122,.126],[0,2.08,.052,.171,.167],[0,2.18,.040,.193,.179],[0,2.29,.025,.173,.164],[0,2.37,.018,.101,.105]],F.skin,12,head);
+  for(const x of [-.185,.185]){blob([x,2.14,.025],.047,.064,.037,F.skin,8,head);blob([x*1.14,2.14,.034],.012,.036,.020,F.shade,6,head,.92);}
+  // Side-swept, angular-soft black hair. The rear fall and fringe are distinct.
+  loft([[0,2.103,-.064,.155,.090],[0,2.17,-.040,.192,.125],[0,2.235,-.024,.202,.152],[0,2.328,.004,.182,.168],[.014,2.395,.015,.127,.127],[.039,2.425,.010,.048,.068]],F.hair,12,head);
+  blob([-.075,2.33,.118],.143,.071,.107,F.hair,10,head);
+  blob([.069,2.31,.122],.116,.048,.099,F.hair,8,head);
+  if(hero){
+   loft([[0,2.325,-.023,.218,.188],[0,2.38,-.025,.222,.187],[0,2.44,-.025,.182,.158],[0,2.49,-.04,.094,.101],[0,2.503,-.048,.035,.043]],khaki,12,head);
+   loft([[0,2.308,.14,.179,.171],[0,2.329,.142,.20,.186],[0,2.357,.123,.207,.172]],khaki,12,head,.89);
+   blob([0,2.406,.139],.060,.025,.012,[193,163,98],8,head);
   }
+  if(feminine){
+   blob([0,2.18,-.157],.123,.109,.076,F.hair,10,head);
+   limb(head([0,2.18,-.195]),upper([.09,1.83,-.255]),.071,.041,F.hair,8);
+   blob([.01,2.15,-.22],.045,.021,.042,[183,94,73],8,head);
+  }
+  for(const sign of [-1,1]){
+   const x=.071*sign, blink=pose.blink;
+   blob([x,2.187,.195],hero?.027:.034,(hero?.017:.026)*blink,.009,F.white,6,head);
+   blob([x+.004,2.188,.204],hero?.012:.015,(hero?.014:.020)*blink,.006,[39,38,31],6,head);
+   limb(head([x-.025,2.234,.186]),head([x+.025,2.24,.18]),.011,.010,F.hair,6);
+  }
+  blob([0,2.132,.212],.034,.041,.030,F.skin,8,head);
+  limb(head([-.034,2.072,.175]),head([.006,2.062,.188]),.005,.006,[132,76,61],6);
+  limb(head([.006,2.062,.188]),head([.042,2.075,.174]),.006,.004,[132,76,61],6);
   // Moss-green rucksack with a rounded sleeping roll, shoulder straps, a
   // closure flap, woven detail, buckles and a bottle in one side pocket.
   if(!local){
