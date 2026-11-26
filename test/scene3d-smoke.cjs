@@ -77,7 +77,7 @@ Rig.draw((vertices,color)=>{
 assert(defaultColors.has('218,113,29'),'The default hiker wears the reference orange jacket');
 assert(defaultColors.has('43,64,70'),'The chest camera has a modeled glass lens');
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
-for(const action of ['fish','reel','meal','snack','drink','rest','photo','bath','shower']){
+for(const action of ['fish','reel','meal','snack','drink','rest','photo','bath','shower','romance']){
  rig.reset();
  const p=Array.from({length:28},(_,i)=>rig.pose({action,actionTime:i/30,seconds:2+i/30})).at(-1);
  let faces=0;Rig.draw((vertices)=>{check(...vertices.flat());faces++},v=>v,p,'walk');
@@ -90,5 +90,7 @@ for(const [at,bathSite] of ['lake','stream','pond'].entries()){
  for(const actionTime of [.2,1.5,4])scene.render({route:E.profile(at,at+1),d:0,bathSite,action:'bath',actionTime,seconds:actionTime});
 }
 scene.render({route:E.profile(4,5),d:0,action:'shower',actionTime:1.5,seconds:5.5});
+vm.runInContext(fs.readFileSync(path.join(root,'social.js'),'utf8'),c);
+scene.render({route:E.profile(0,1),d:0,socialGuests:['an','khoi'],romanceGuest:'an',action:'romance',actionTime:1.5,actionDuration:3.5,seconds:6});
 
 console.log('OK: 3D geometry and all vehicle modes; uphill/downhill, hunger, thirst, energy, health, damage and ETA.');

@@ -2,9 +2,9 @@
 globalThis.TripSocial=(()=>{
  const E=TripEngine, D=TripData;
  const creators={
-  an:{name:'An Mây',handle:'@anmay.dian',role:'KOC ẩm thực',bio:'Review quán nhỏ và những món đáng thử ở mỗi bản.',greeting:'Anh có món nào ở Hà Giang muốn thử không? Em đang tìm một quán cơm nhà.'},
+  an:{name:'An Mây',handle:'@anmay.dian',role:'KOC ẩm thực',bio:'Review quán nhỏ và những món đáng thử ở mỗi bản.',greeting:'Anh có món nào ở Hà Giang muốn thử không? Em đang tìm một quán cơm nhà.',romance:{flirt:'Em thích cách anh nhớ mấy quán nhỏ em kể.',date:'Cùng chọn một món ở quán ven đường rồi chia đôi. Em muốn thử thêm chỗ này với anh.',yes:'Em cũng thích anh. Mình yêu nhau nha?'}},
   khoi:{name:'Khôi Đèo',handle:'@khoideo.road',role:'KOL du lịch',bio:'Quay clip đường đèo, chợ phiên và những người gặp trên đường.',greeting:'Anh vừa đi qua đoạn nào đẹp? Em đang ghi lại chuyến đi Hà Giang.'},
-  nhi:{name:'Nhi Gió',handle:'@nhigio.camp',role:'KOC đồ dã ngoại',bio:'Thử đồ đi đường và giới thiệu các cửa hàng địa phương.',greeting:'Sáng mai em định test bộ pha cà phê cắm trại. Anh hay nghỉ ở đâu?'}
+  nhi:{name:'Nhi Gió',handle:'@nhigio.camp',role:'KOC đồ dã ngoại',bio:'Thử đồ đi đường và giới thiệu các cửa hàng địa phương.',greeting:'Sáng mai em định test bộ pha cà phê cắm trại. Anh hay nghỉ ở đâu?',romance:{flirt:'Nói chuyện với anh vui ghê. Lần sau kể em nghe thêm về chuyến leo đèo nhé.',date:'Mình pha hai ly cà phê rồi ngồi ngắm đường đèo nhé, em mang sẵn bộ pha đây.',yes:'Em cũng có tình cảm với anh. Em muốn tụi mình chính thức hẹn hò.'}}
  };
  const venues={
   start:{name:'Sân cà phê Hà Giang',host:'an',topic:'quán nhỏ ven sông Lô',outing:'Đi dạo bờ sông'},
@@ -16,7 +16,11 @@ globalThis.TripSocial=(()=>{
   chat:{label:'Trò chuyện',gain:7,minutes:18,min:10},
   meal:{label:'Ăn cùng · 10k',gain:12,minutes:35,min:10,cost:10,food:20,water:10},
   outing:{gain:14,minutes:65,min:15,cost:8,energy:-6},
-  clip:{label:'Quay clip cùng',gain:9,minutes:30,min:22}
+  clip:{label:'Quay clip cùng',gain:9,minutes:30,min:22},
+  flirt:{label:'Tán tỉnh',gain:3,minutes:12,min:17,affection:16},
+  date:{label:'Mời đi hẹn hò',gain:9,minutes:50,min:30,interest:16,affection:20},
+  confess:{label:'Ngỏ lời yêu',gain:0,minutes:15,min:35,interest:20},
+  breakup:{label:'Dừng hẹn hò',gain:0,minutes:10}
  };
  const owns=(value,key)=>Object.hasOwn(value,key);
  const limit=(value,min,max)=>Math.min(max,Math.max(min,value));
@@ -28,7 +32,7 @@ globalThis.TripSocial=(()=>{
    const saved=data?.contacts?.[id],done={};
    if(!saved)continue;
    for(const action of Object.keys(actions))done[action]=int(saved.done?.[action],Number.MAX_SAFE_INTEGER);
-   contacts[id]={bond:int(saved.bond,100),done};
+   contacts[id]={bond:int(saved.bond,100),done,affection:int(saved.affection,100),dates:int(saved.dates,999)};
   }
   const incidents={};
   for(const id of Object.keys(venues)){
@@ -36,15 +40,34 @@ globalThis.TripSocial=(()=>{
    if(saved&&Number.isSafeInteger(saved.day)&&['calm','fight'].includes(saved.outcome))incidents[id]={day:saved.day,outcome:saved.outcome};
   }
   const detained=owns(venues,data?.detained)?data.detained:null;
-  return {contacts,incidents,detained,followers:int(data?.followers,999999),clips:int(data?.clips,99999),reputation:int(data?.reputation??50,100)};
+  const partner=owns(creators,data?.partner)&&creators[data.partner].romance&&contacts[data.partner]?.dates>=2?data.partner:null;
+  return {contacts,incidents,detained,partner,followers:int(data?.followers,999999),clips:int(data?.clips,99999),reputation:int(data?.reputation??50,100)};
  }
  function venue(s){
   const id=D.places[s.at].id;
   if(!owns(venues,id))return null;
   const spot=venues[id],others=Object.keys(creators).filter(name=>name!==spot.host);
-  return {...spot,id,guests:[spot.host,others[(dayOf(s)-1)%others.length]]};
+  const partner=s.social.partner;
+  return {...spot,id,guests:[spot.host,partner&&partner!==spot.host?partner:others[(dayOf(s)-1)%others.length]]};
  }
- const contact=(s,id)=>s.social.contacts[id]??{bond:0,done:{}};
+ const contact=(s,id)=>s.social.contacts[id]??{bond:0,done:{},affection:0,dates:0};
+ const romanticKeys=new Set(['flirt','date','confess','breakup']);
+ function visible(s,id,key){
+  if(!romanticKeys.has(key))return true;
+  if(!creators[id]?.romance)return false;
+  const partner=s.social.partner;
+  if(key==='breakup')return partner===id;
+  if(key==='confess')return !partner;
+  return !partner||partner===id;
+ }
+ function requirements(s,id,key){
+  const act=actions[key],person=contact(s,id);
+  if(person.bond<(act.min??0))return 'Cần thân thiết '+act.min;
+  if(person.affection<(act.interest??0))return 'Cần cảm tình '+act.interest;
+  if(person.done[key]===dayOf(s)&&key!=='breakup')return 'Đã làm hôm nay';
+  if(s.money<(act.cost??0))return 'Cần '+act.cost+'k';
+  return '';
+ }
  function banter(s,spot){
   const [a,b]=spot.guests.map(id=>creators[id].name);
   const day=dayOf(s),minute=s.clock%1440;
@@ -56,13 +79,12 @@ globalThis.TripSocial=(()=>{
   return lines[(day+Math.floor(minute/16))%lines.length];
  }
  function available(s,id,key,spot=venue(s)){
-  const act=actions[key],person=contact(s,id);
-  return Boolean(act&&spot?.guests.includes(id)&&!s.social.detained
-   &&person.bond>=(act.min??0)&&person.done[key]!==dayOf(s)&&s.money>=(act.cost??0));
+  return Boolean(owns(actions,key)&&spot?.guests.includes(id)&&!s.social.detained
+   &&visible(s,id,key)&&!requirements(s,id,key));
  }
  function interact(s,id,key){
   if(!owns(creators,id)||!owns(actions,key)||!available(s,id,key))return '';
-  const act=actions[key],person=contact(s,id),name=creators[id].name;
+  const act=actions[key],person=contact(s,id),{name,romance}=creators[id];
   s.social.contacts[id]=person;
   person.done[key]=dayOf(s);person.bond=limit(person.bond+act.gain,0,100);
   s.money-=act.cost??0;
@@ -70,6 +92,20 @@ globalThis.TripSocial=(()=>{
   s.water=limit(s.water+(act.water??0),0,100);
   s.energy=limit(s.energy+(act.energy??0),0,100);
   s.clock+=act.minutes;
+  if(romanticKeys.has(key)){
+   if(key==='breakup'){
+    s.social.partner=null;person.affection=0;person.dates=0;
+    return 'Anh và '+name+' đã nói chuyện và quyết định dừng hẹn hò.';
+   }
+   if(key==='confess'){
+    if(person.dates<2||person.affection<50||person.bond<50)return name+' nói “Em có cảm tình, nhưng muốn có thêm thời gian tìm hiểu nhau.”';
+    s.social.partner=id;
+    return name+' nói “'+romance.yes+'” Cả hai đã thành một đôi.';
+   }
+   person.affection=limit(person.affection+act.affection,0,100);
+   if(key==='date')person.dates=Math.min(999,person.dates+1);
+   return name+' nói “'+romance[key]+'”';
+  }
   if(key==='clip'){
    const gained=30+person.bond*2+Math.floor(s.social.reputation/2);
    s.social.followers=Math.min(999999,s.social.followers+gained);
@@ -106,5 +142,5 @@ globalThis.TripSocial=(()=>{
   s.money-=fee;s.clock+=100;s.social.detained=null;
   return 'Đã giải quyết ở trạm'+(fee?' · −'+fee+'k':'')+'. Anh có thể tiếp tục chuyến đi.';
  }
- return {creators,actions,restore,venue,contact,banter,available,interact,conflict,resolve,settle};
+ return {creators,actions,restore,venue,contact,banter,visible,requirements,available,interact,conflict,resolve,settle};
 })();

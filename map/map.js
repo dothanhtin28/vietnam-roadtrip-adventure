@@ -221,7 +221,7 @@ canvas.addEventListener('pointermove',e=>{
 ['pointerup','pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
 let lastStats=NaN;
 function meters(v){['food','water','energy','health','clean'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
-function animate(kind,seconds){activity={kind,at:performance.now(),until:performance.now()+seconds*1000};}
+function animate(kind,seconds,guest=null){const at=performance.now();activity={kind,at,until:at+seconds*1000,guest};}
 function updateStats(){
  const t=travel,clock=Math.floor(gameClock()),weather=E.weather(clock);
  const pickupButton=$('pickup-item'),nearby=in3d&&!jump&&pickupDistance()<=3.5;
@@ -253,7 +253,7 @@ function drawScene(ms){
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
  scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
-  action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
+  action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,romanceGuest:ms<(activity?.until??0)?activity.guest:null,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
 function say(text){showText=text;$('message').textContent=text;}
@@ -500,9 +500,9 @@ function renderSocial(local){
  const response=$('social-response');
  response.hidden=!socialResponse;response.textContent=socialResponse;
  content.replaceChildren();
- function finish(message,animation,duration=2.4){
+ function finish(message,animation,duration=2.4,guest=null){
   if(!message)return;
-  socialResponse=message;say(message);if(animation)animate(animation,duration);save();render();
+  socialResponse=message;say(message);if(animation)animate(animation,duration,guest);save();render();
  }
  if(s.social.detained){
   panel.open=true;
@@ -519,13 +519,20 @@ function renderSocial(local){
  const profile=dom('div'),portrait=dom('img'),description=dom('div');
  profile.className='social-profile';portrait.src='assets/creator-'+id+'.webp';portrait.alt=creator.name;portrait.loading='lazy';
  description.append(dom('strong',creator.name+' · '+creator.role),dom('p',creator.handle+' · Thân thiết '+person.bond+'/100'),dom('p',creator.bio));
+ if(creator.romance&&(!s.social.partner||s.social.partner===id)){
+  const status=s.social.partner===id?'Đang yêu':person.dates?'Đang tìm hiểu':'';
+  const detail=['Cảm tình '+person.affection+'/100',person.dates?person.dates+' buổi hẹn':'',status].filter(Boolean).join(' · ');
+  const relationship=dom('p',detail);relationship.className='social-relationship';description.append(relationship);
+ }
  profile.append(portrait,description);
  const actions=dom('div');actions.className='social-actions';
  for(const [key,details] of Object.entries(S.actions)){
+  if(!S.visible(s,id,key))continue;
   const label=key==='outing'?spot.outing+' · '+details.cost+'k':details.label;
-  const button=socialButton(label,()=>finish(S.interact(s,id,key),key==='clip'?'photo':key==='meal'?'meal':null),!S.available(s,id,key,spot));
-  if(person.bond<(details.min??0))button.title='Cần thân thiết '+details.min;
-  else if(person.done[key]===E.day(s))button.title='Đã làm hôm nay';
+  const romance=['flirt','date','confess'].includes(key);
+  const animation=romance?'romance':key==='clip'?'photo':key==='meal'?'meal':null;
+  const button=socialButton(label,()=>finish(S.interact(s,id,key),animation,romance?3.5:2.4,romance?id:null),!S.available(s,id,key,spot));
+  button.title=S.requirements(s,id,key);
   actions.append(button);
  }
  content.append(selector,profile,actions);

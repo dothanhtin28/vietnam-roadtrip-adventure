@@ -388,6 +388,10 @@ globalThis.WindHiker=(()=>{
     }
     if(last==='rest')to=[sign*.26,1.08,.46];
     if(last==='photo')to=[sign*.113,2.069,.313];
+    if(last==='romance'&&side){
+     const gesture=ease(clamp((t-.35)/.6,0,1))*ease(clamp((2.85-t)/.58,0,1));
+     to=[.39-.13*gesture,1.12+.37*gesture,.03+.35*gesture];
+    }
     if(last==='scuffle')to=[sign*.32,1.58+.18*Math.sin(t*5+sign),.35];
     return between(base,to,mixActivity);
    }

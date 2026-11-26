@@ -12,6 +12,7 @@ Mở `index.html` sau khi pull. Game mở ở góc nhìn 3D và chạy bằng HT
 ## Hoạt động dọc đường
 - Nút ăn và uống trong túi có động tác riêng, kể cả khi dừng giữa chặng. Đi đường làm giảm sạch sẽ. Có thể tắm ở trạm nghỉ, hồ nhỏ ở Hà Giang, suối bên bến sông Lô hoặc ao đầu bản.
 - Ghé sân cà phê Hà Giang, phố quán Yên Minh hoặc sân chợ Đồng Văn để giao lưu với các nhà sáng tạo hư cấu. Chào hỏi, ăn cùng và đi chơi giúp tăng độ thân thiết để mở quay clip. Nếu có cãi vã, can ngăn giúp tăng uy tín. Gây gổ có thể làm chuyến đi dừng ở trạm cảnh sát.
+- Trong mục **Giao lưu**, có thể làm quen và hẹn hò với An Mây hoặc Nhi Gió. Trò chuyện để tăng thân thiết, rồi chọn **Tán tỉnh** và **Mời đi hẹn hò**. Mỗi người có một buổi hẹn mỗi ngày. Sau ít nhất hai buổi hẹn và khi đủ thân thiết, **Ngỏ lời yêu** có thể đưa hai người thành một đôi. Người yêu có thể gặp lại tại các điểm giao lưu.
 - Mở **Trang phục** tại điểm dừng để mặc bộ đã sở hữu hoặc xem nhân vật ở góc gần. Cam đường đèo là bộ mặc định của chuyến mới. Xanh rêu và Chàm cao nguyên cũng có sẵn. Hà Giang, Yên Minh và Chợ Đồng Văn có bán trang phục mới.
 - Kéo để dời bản đồ. Cuộn chuột, chụm hai ngón hoặc dùng nút +/− để zoom. Nút ◎ về vị trí hiện tại, ▣ mở toàn tuyến.
 - Ghim mở thông tin điểm dừng. Có thể gõ cửa nhà dân để hỏi mua cơm nước, mua nước tăng lực ở quán hoặc thuê xe bò theo chặng tại trạm. Nấm, ngô và trái cây nhặt ven đường có thể ăn hoặc mang bán.

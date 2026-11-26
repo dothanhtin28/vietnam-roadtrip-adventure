@@ -181,7 +181,7 @@ function attach(canvas){
  const heroImages=Object.fromEntries(['shell','canvas','leather','cordura'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,romanceGuest=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
   const frameGap=lastFrame===null?.033:seconds-lastFrame,dt=cap(frameGap,0,.08);lastFrame=seconds;
   if(frameGap>0&&frameGap<.18)frameAverage=mix(frameAverage,frameGap,.09);
@@ -224,7 +224,9 @@ function attach(canvas){
   const target=travelBearing+orbit+(clothingPreview?0:mode==='walk'?.32:mode==='cart'?.24:0);
   angle=angular(angle,target,1-Math.exp(-dt*5.5));
   const facing=mode==='walk'&&(moving||steppingToWater)&&distance>.001?Math.atan2(dx,dz):travelBearing;
-  const wantedYaw=facing+(mode==='walk'?0:steer*.31);
+  const courting=action==='romance'&&socialGuests?.includes(romanceGuest);
+  const approach=courting?smooth(cap(actionTime/.95,0,1))*smooth(cap((actionDuration-actionTime)/.7,0,1)):0;
+  const wantedYaw=courting?direction+.62*approach:facing+(mode==='walk'?0:steer*.31);
   let turnDelta=0;
   if(actorYaw===null)actorYaw=wantedYaw;
   else{
@@ -727,16 +729,20 @@ function attach(canvas){
   }
   if(socialGuests){
    const speaking=Math.floor(seconds/4)%socialGuests.length;
+   const sn=Math.sin(direction),cs=Math.cos(direction);
    for(const [i,id] of socialGuests.entries()){
-    const guest=globalThis.TripSocial.creators[id],side=i===0?3.9:6.0;
-    const p=shift(base,side,0,7.7+i*.7);
+    const guest=globalThis.TripSocial.creators[id],responding=courting&&id===romanceGuest;
+    const nearGuest=responding?approach:0;
+    const side=mix(i===0?3.9:6.0,1.95,nearGuest),ahead=mix(7.7+i*.7,2.75,nearGuest);
+    const p=add(base,side*cs+ahead*sn,0,ahead*cs-side*sn);
     p.h=land(p.x,p.z)+.12;
-    const sway=!reduced&&speaking===i?Math.sin(seconds*3)*.028:0;
+    const talking=courting?responding:speaking===i;
+    const sway=!reduced&&talking?Math.sin(seconds*3)*.028:0;
     billboard(creatorImages[id],p,2.54,{sway,flip:i===0});
     if(!creatorImages[id]?.naturalWidth||!ctx.fillText)continue;
     const [x,y,z]=tr(add(p,0,2.91,0));
     if(z<=near||z>35)continue;
-    const text=guest.name+(speaking===i?' …':'');
+    const text=guest.name+(talking?' …':'');
     faces.push({label:text,x:W*.5+x*focal/z,y:horizon-y*focal/z,depth:z-.15,layer:2});
    }
   }
