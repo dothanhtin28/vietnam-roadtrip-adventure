@@ -57,6 +57,14 @@ assert(rig.pose({trekking:true}).poles);
 assert(!rig.pose({trekking:true,mode:'bike'}).poles);
 rig.reset();
 const tank=rig.pose({seconds:1}), rest=Array.from({length:30},(_,i)=>rig.pose({action:'rest',actionTime:i/30,seconds:2+i/30})).at(-1);
+const surfaceKinds=new Set(),heroColors=new Set();
+Rig.draw((vertices,color,light,bias,material)=>{
+ check(...vertices.flat(),light,bias);
+ heroColors.add(color.join(','));
+ if(material){assert.equal(material.uv.length,vertices.length);check(...material.uv.flat());surfaceKinds.add(material.kind);}
+},v=>v,tank,'walk',false,undefined,{clothing:'indigo',materials:true,packPhoto:true,headPhoto:true});
+assert.deepEqual([...surfaceKinds].sort(),['backpack','canvas','cordura','head','leather','shell']);
+assert(heroColors.has('69,88,115'),'The selected jacket palette should reach the player mesh');
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
 for(const action of ['fish','reel','meal','drink','rest','photo']){
  rig.reset();

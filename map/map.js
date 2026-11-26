@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const {places,roads,modes,companions,petPrices,riverPath,cartFare,energyDrinkPrice,forage}=TripData,E=TripEngine,key='wind-trip-map-v1';
+const {places,roads,modes,companions,petPrices,riverPath,cartFare,energyDrinkPrice,forage,clothing}=TripData,E=TripEngine,key='wind-trip-map-v1';
 const $=id=>document.getElementById(id),vp=$('viewport'),world=$('world'),marker=$('marker');
 const dom=(tag,text='')=>{const e=document.createElement(tag);e.textContent=text;return e;};
 function load(){
@@ -12,6 +12,7 @@ function load(){
    for(const item of ['energyDrinks',...Object.keys(forage)])s.bag[item]=Number.isSafeInteger(s.bag[item])&&s.bag[item]>=0?s.bag[item]:0;
    s.foraged=s.foraged&&typeof s.foraged==='object'&&!Array.isArray(s.foraged)?s.foraged:{};
    s.boostUntil=Number.isFinite(s.boostUntil)?s.boostUntil:0;
+   s.wardrobe=E.wardrobe(s.wardrobe);
    s.campAt=s.campAt===s.at&&E.canCamp(s)?s.at:null;
    return s;
   }
@@ -19,11 +20,13 @@ function load(){
  return E.fresh();
 }
 let s=load(),selected=s.at, travel=null, cast=null, last=0, hit=0, scale=1, tx=0,ty=0, initialized=false;
+$('wardrobe').open=s.at===0;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
 let in3d=false,geographic=false,orbit=0,look=0,viewpoint=false,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
 let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
 let openHost=null,auto=false;
+let clothingPreview=false;
 const jumpDuration=.86;
 const worldUnitsPerKmh=.44;
 const keys=new Set(),buttons=new Map(),inputs={w:'forward',ArrowUp:'forward',s:'back',ArrowDown:'back',a:'left',ArrowLeft:'left',d:'right',ArrowRight:'right'};
@@ -99,6 +102,7 @@ function locateOnGeoMap(stop=null){
 }
 function setView(on,geo=false,stop=null){
  clearDrive();needRelease=false;
+ if(!on)clothingPreview=false;
  geographic=geo;
  in3d=Boolean(on&&scene);if(on&&!scene)say('Thiết bị không mở được góc nhìn 3D. Bản đồ vẫn dùng được.');
  $('scene-panel').hidden=!in3d;vp.hidden=in3d||geo;$('map-nav').hidden=vp.hidden;$('map-caption').hidden=vp.hidden;
@@ -151,7 +155,17 @@ fullscreen.onclick=async()=>{
 };
 const rotate=n=>{orbit=Math.atan2(Math.sin(orbit+n),Math.cos(orbit+n));};
 const tilt=n=>{look=Math.max(-1.43,Math.min(1.03,look+n));};
-$('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43);$('orbit-reset').onclick=()=>{orbit=0;look=0;viewpoint=false;};
+$('preview-clothing').onclick=()=>{
+ if(travel||cast)return;
+ if(!in3d)setView(true);
+ clothingPreview=!clothingPreview;
+ orbit=clothingPreview?Math.PI:0;look=0;viewpoint=false;
+ renderWardrobe(selected===s.at);
+};
+$('orbit-left').onclick=()=>rotate(-.43);$('orbit-right').onclick=()=>rotate(.43);$('orbit-reset').onclick=()=>{
+ orbit=0;look=0;viewpoint=false;
+ if(clothingPreview){clothingPreview=false;renderWardrobe(selected===s.at);}
+};
 $('look-up').onclick=()=>tilt(.20);$('look-down').onclick=()=>tilt(-.20);
 function lookAtRiver(){
  if(!in3d)setView(true);
@@ -231,7 +245,7 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
   action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
@@ -363,7 +377,7 @@ function travelStart(direction,mode=s.mode){
  const pickup=E.forageSpot(s,s.at,to,plan.distance);
  if(pickup)pickup.position=E.roadPoint(plan.profile,pickup.at,plan.footOnly?.85:2.4);
  blocked='';activity=null;openHost=null;travel={to,plan,d:0,direction,heading:1,facing:1,throttle:1,nextHazard:0,damage:0,roadMinutes:0,holdUntil:0,warned:false,pickup};
- selected=s.at;orbit=0;look=0;viewpoint=false;aside=0;
+ selected=s.at;orbit=0;look=0;viewpoint=false;clothingPreview=false;aside=0;
  say(mode==='cart'?'Xe bò đã sẵn sàng. Giữ W hoặc ▲ để đi, trả tiền khi tới nơi.':'Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
 }
 function finishTravel(){
@@ -415,6 +429,33 @@ function trailGuide(){
   footOnly?'Đường mòn chỉ đi bộ · W/S đi, Q quay đầu, E nhặt đồ.':
   activeMode()==='walk'?'W/S tiến hoặc lùi · A/D né · Q quay đầu · E nhặt đồ · Space nhảy.':'W/S tiến hoặc lùi · A/D né · Q quay đầu · E nhặt đồ.';
 }
+function renderWardrobe(local){
+ const panel=$('wardrobe'),options=$('clothing-options');
+ panel.hidden=!local||Boolean(travel||cast);
+ if(panel.hidden)return;
+ $('current-clothing').textContent=clothing[s.wardrobe.active].name;
+ const preview=$('preview-clothing');
+ preview.hidden=!scene;
+ preview.textContent=clothingPreview?'Về góc nhìn đi đường':'Xem nhân vật gần hơn';
+ preview.setAttribute('aria-pressed',String(clothingPreview));
+ options.replaceChildren();
+ for(const [id,outfit] of Object.entries(clothing)){
+  const owned=s.wardrobe.owned.includes(id),active=s.wardrobe.active===id;
+  if(!owned&&!E.sellsClothing(s))continue;
+  const row=dom('div'),swatch=dom('span'),button=dom('button',active?'Đang mặc':owned?'Mặc':'Mua & mặc · '+outfit.price+'k');
+  row.className='clothing-option';swatch.style.backgroundColor=outfit.accent;swatch.setAttribute('aria-hidden','true');
+  button.type='button';button.disabled=active||(!owned&&s.money<outfit.price);
+  button.setAttribute('aria-pressed',String(active));
+  button.setAttribute('aria-label',button.textContent+' · '+outfit.name);
+  button.onclick=()=>{
+   if(travel||cast||selected!==s.at)return;
+   if(owned?E.equipClothing(s,id):E.buyClothing(s,id)){
+    say((owned?'Đã mặc ':'Đã mua và mặc ')+outfit.name+'.');save();render();
+   }
+  };
+  row.append(swatch,dom('strong',outfit.name),button);options.append(row);
+ }
+}
 function render(){
  const p=places[selected],local=selected===s.at;
  $('mode').textContent=modes[activeMode()].name;$('money').textContent=s.money+'k ₫';updateStats();
@@ -426,7 +467,7 @@ function render(){
  $('mission').textContent=s.photos.length===3?'Hoàn thành bộ ảnh Hà Giang!':'Bộ ảnh Hà Giang: '+s.photos.length+'/3';
  $('party').hidden=!party.length;$('party').textContent=party.length?'Đi cùng '+party.join(' · '):'';
  $('message').textContent=showText;marker.textContent=petIcons||modes[activeMode()].icon;marker.title=modes[activeMode()].name;
- pinState();$('actions').replaceChildren();trailGuide();
+ pinState();$('actions').replaceChildren();trailGuide();renderWardrobe(local);
  if(travel){route(travel.plan,travel.d);supplyActions();return;}
  position(...coords(places[s.at]));
  if(cast){route(null);action('Giật cần',catchNow);return;}
@@ -578,7 +619,7 @@ function loop(ms){
  drawScene(ms);
  requestAnimationFrame(loop);
 }
-$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();selected=0;travel=null;cast=null;activity=null;openHost=null;idleRoute=previewRoute();orbit=0;look=0;viewpoint=false;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
+$('reset').onclick=()=>{if(confirm('Bắt đầu lại và xóa tiến độ bản đồ?')){s=E.fresh();$('wardrobe').open=true;selected=0;travel=null;cast=null;activity=null;openHost=null;idleRoute=previewRoute();orbit=0;look=0;viewpoint=false;clothingPreview=false;aside=0;clearDrive();needRelease=false;save();overview();say('Chuyến mới bắt đầu tại Hà Giang.');render();}};
 if(s.at!==0&&!E.encounter(s)){E.meet(s);save();}
 buildTerrain();overview();initialized=true;setView(Boolean(scene));render();requestAnimationFrame(loop);
 })();

@@ -176,9 +176,12 @@ function attach(canvas){
  const house=image('assets/village-house.webp');
  const localImages=Object.fromEntries(['woman','elder','child'].map(kind=>[kind,image('assets/resident-'+kind+'.webp')]));
  const grass=image('assets/ground-grass.webp'),dirt=image('assets/ground-trail.webp');
+ const heroImages=Object.fromEntries(['shell','canvas','leather','cordura','backpack','head'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
+ const photoSurface=kind=>kind==='head'||kind==='backpack';
+ const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
-  if(action)mode='walk';
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing,clothingPreview=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+  if(action||clothingPreview)mode='walk';
   const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
   if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}
@@ -196,13 +199,13 @@ function attach(canvas){
   const gust=weather.kind==='wind'?1.85:.65+rain*.8;
   const angular=(old,want,alpha)=>old===null?want:old+Math.atan2(Math.sin(want-old),Math.cos(want-old))*alpha;
   const travelBearing=direction+(viewDirection<0?Math.PI:0);
-  const target=travelBearing+orbit+(mode==='walk'?.32:mode==='cart'?.24:0);
+  const target=travelBearing+orbit+(clothingPreview?0:mode==='walk'?.32:mode==='cart'?.24:0);
   angle=angular(angle,target,1-Math.exp(-dt*5.5));
   const facing=mode==='walk'&&moving&&distance>.001?Math.atan2(dx,dz):travelBearing;
   actorYaw=angular(actorYaw,facing+(mode==='walk'?0:steer*.31),1-Math.exp(-dt*10));
   const heading=actorYaw,fx=Math.sin(angle),fz=Math.cos(angle),rx=fz,rz=-fx;
-  const follow=viewpoint?-27:mode==='cart'?13:mode==='car'?10.1:mode==='walk'?8.65:8.6;
-  const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(viewpoint?11:mode==='cart'?4.25:mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
+  const follow=clothingPreview?4.9:viewpoint?-27:mode==='cart'?13:mode==='car'?10.1:mode==='walk'?8.65:8.6;
+  const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(clothingPreview?2.24:viewpoint?11:mode==='cart'?4.25:mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
   want.h=Math.max(want.h,land(want.x,want.z)+1.8);
   if(!camera||Math.hypot(want.x-camera.x,want.z-camera.z)>24)camera=want;
   else{const a=1-Math.exp(-dt*12);camera={x:mix(camera.x,want.x,a),h:mix(camera.h,want.h,a*.82),z:mix(camera.z,want.z,a)};}
@@ -276,9 +279,19 @@ function attach(canvas){
   const near=1.25, faces=[];let layer=0;
   if(!grassPattern&&grass?.naturalWidth)grassPattern=ctx.createPattern(grass,'repeat');
   if(!dirtPattern&&dirt?.naturalWidth)dirtPattern=ctx.createPattern(dirt,'repeat');
-  function face(points,c,shade=1,bias=0,pattern=null){
+  for(const [kind,bitmap] of Object.entries(heroImages)){
+   if(!heroPatterns[kind]&&bitmap?.naturalWidth)heroPatterns[kind]=ctx.createPattern(bitmap,photoSurface(kind)?'no-repeat':'repeat');
+  }
+  const towardCamera=(cam.x-pos.x)*Math.sin(heading)+(cam.z-pos.z)*Math.cos(heading);
+  const view=cap(towardCamera/Math.max(1,Math.hypot(cam.x-pos.x,cam.z-pos.z)),-1,1);
+  const actorOptions={clothing,materials:Boolean(heroPatterns.shell),closeup:clothingPreview,packPhoto:Boolean(heroPatterns.backpack)&&view<-.66,
+   headPhoto:Boolean(heroPatterns.head)&&view>.83};
+  function face(points,c,shade=1,bias=0,pattern=null,material=null,coverage=1){
    const ps=points.map(tr);if(ps.every(v=>v[2]<near)||ps.every(v=>v[2]>385))return;
-   if(pattern)ps.forEach((p,i)=>{p[3]=points[i].x;p[4]=points[i].z;});
+   if(pattern)ps.forEach((p,i)=>{
+    const uv=material?.uv[i];
+    p[3]=uv?uv[0]:points[i].x*52;p[4]=uv?uv[1]:points[i].z*52;
+   });
    const clipped=[];
    for(let i=0;i<ps.length;i++){
     const a=ps[i],b=ps[(i+1)%ps.length],ain=a[2]>=near,bin=b[2]>=near;
@@ -293,9 +306,19 @@ function attach(canvas){
    const depth=clipped.reduce((n,p)=>n+p[2],0)/clipped.length, haze=cap((depth-35)/325,0,.86);
    const screen=clipped.map(([x,y,z])=>[W*.5+x*focal/z,horizon-y*focal/z]);
    if(screen.every(p=>p[0]<-4)||screen.every(p=>p[0]>W+4)||screen.every(p=>p[1]<-4)||screen.every(p=>p[1]>H+4))return;
-   const opacity=layer===0&&panorama?.naturalWidth&&!viewpoint?1-cap((depth-75)/175,0,.87):1;
+   const opacity=layer===0&&panorama?.naturalWidth&&!viewpoint?coverage*(1-cap((depth-75)/175,0,.87)):coverage;
    faces.push({screen,color:'rgb('+c.map((n,i)=>Math.round(mix(n*shade,fog[i],haze))).join(',')+')',
-    depth:depth+bias,layer,opacity,pattern,uv:pattern?clipped.map(p=>[p[3]*52,p[4]*52]):null});
+    depth:depth+bias,layer,opacity,pattern,material:material?.kind,
+    uv:pattern?clipped.map(p=>[p[3],p[4]]):null});
+  }
+  function heroFace(points,color,light,_bias,material){
+   const kind=material?.kind,pattern=heroPatterns[kind];
+   if(photoSurface(kind)){
+    if(!pattern)return;
+    const bitmap=heroImages[kind];
+    material={kind,uv:material.uv.map(([x,y])=>[x*bitmap.naturalWidth,y*bitmap.naturalHeight])};
+   }
+   face(points,color,light,-1.8,pattern,material);
   }
   function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1}={}){
    if(!bitmap?.naturalWidth)return false;
@@ -536,11 +559,12 @@ function attach(canvas){
   const shadowWidth=mode==='car'?1.72:mode==='walk'?.76:.86,length=mode==='car'?2.42:mode==='walk'?.66:1.60;
   layer=1.5;
   for(let l=0;l<7;l++){
-   const fade=1-l*.102,c=[173-l*12,150-l*10,106-l*6];
+   const fade=1-l*.102;
    const shape=Array.from({length:24},(_,i)=>{
-    const a=i*Math.PI/12, q=shift(pos,Math.cos(a)*shadowWidth*fade+.12,.19+(.004*l),Math.sin(a)*length*fade-.08);
-    return q;
-   });face(shape,c,1,-l*.03);
+    const a=i*Math.PI/12;
+    return shift(pos,Math.cos(a)*shadowWidth*fade+.12,.19+(.004*l),Math.sin(a)*length*fade-.08);
+   });
+   face(shape,[41,37,28],1,-l*.03,null,null,(.037+.008*l)*(1-.42*E.jumpHeight(jump)));
   }
   layer=2;
   function wheel(p,r,w,yaw){
@@ -582,7 +606,7 @@ function attach(canvas){
     }
    }
    const seat=actor.pose({mode:'bike',seconds,dt,reduced});
-   WindHiker.draw((p,c,light)=>face(p,c,light,-1.6),([x,y,z])=>shift(pos,x*.83,y*.83+.59,z*.83-.46),seat,'bike');
+   WindHiker.draw(heroFace,([x,y,z])=>shift(pos,x*.83,y*.83+.59,z*.83-.46),seat,'bike',false,undefined,actorOptions);
   }else{
    if(mode!=='walk'){
     const isBike=mode==='bike',bikeColor=isBike?[192,147,66]:[94,128,108];
@@ -596,7 +620,7 @@ function attach(canvas){
    const grade=E.grade(route,d)*Math.cos(direction-heading);
    const footing=mode==='walk'?.14:0;
    const lift=E.jumpHeight(jump);
-   WindHiker.draw((p,c,light)=>face(p,c,light,-1.8),([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage);
+   WindHiker.draw(heroFace,([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage,undefined,actorOptions);
   }
   if(companion&&mode==='walk'){
    const trail=E.sample(route,d-viewDirection*3.4);
@@ -669,12 +693,16 @@ function attach(canvas){
    const du1=u1-u0,dv1=v1-v0,du2=u2-u0,dv2=v2-v0;
    const determinant=du1*dv2-du2*dv1;
    if(Math.abs(determinant)<.01)return;
+   const screenArea=Math.abs((x1-x0)*(y2-y0)-(x2-x0)*(y1-y0));
+   if(f.material&&!photoSurface(f.material)&&screenArea<(clothingPreview?22:57))return;
    const ax=((x1-x0)*dv2-(x2-x0)*dv1)/determinant;
    const ay=((y1-y0)*dv2-(y2-y0)*dv1)/determinant;
    const bx=(du1*(x2-x0)-du2*(x1-x0))/determinant;
    const by=(du1*(y2-y0)-du2*(y1-y0))/determinant;
    ctx.save();
-   ctx.globalAlpha=cap((48-f.depth)/22,0,.82)*(f.layer===1?1-wet*.60:1);
+   if(photoSurface(f.material))ctx.globalAlpha=1;
+   else if(f.material)ctx.globalAlpha=.8;
+   else ctx.globalAlpha=cap((48-f.depth)/22,0,.82)*(f.layer===1?1-wet*.60:1);
    ctx.transform(ax,ay,bx,by,x0-ax*u0-bx*v0,y0-ay*u0-by*v0);
    ctx.fillStyle=f.pattern;ctx.fill();
    ctx.restore();
@@ -693,6 +721,7 @@ function attach(canvas){
    ctx.beginPath();ctx.moveTo(...f.screen[0]);
    for(let i=1;i<f.screen.length;i++)ctx.lineTo(...f.screen[i]);
    ctx.closePath();ctx.fillStyle=f.color;
+   if(photoSurface(f.material)){drawMaterial(f);continue;}
    if(f.opacity<1){
     ctx.globalAlpha=f.opacity;ctx.fill();ctx.globalAlpha=1;
    }else{

@@ -82,5 +82,12 @@ footer{font-size:.78rem;color:#4e6355}
 #drive-controls button[aria-pressed=true]{background:#16483c;color:#fff5d7}
 #drive-controls #jump{margin-left:3px;padding-inline:11px}
 #drive-controls #pickup-item{background:#fee5ac;color:#633e16;border-color:#b38b51}
+.wardrobe summary{font-weight:700;color:var(--pine)}
+#current-clothing{float:right;margin-left:8px;font-size:.76rem;font-weight:400}
+#clothing-options{display:grid;gap:5px;margin-top:10px}
+.clothing-option{display:grid;grid-template-columns:13px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.8rem}
+.clothing-option>span{width:13px;height:13px;border-radius:50%;border:1px solid #0002}
+.clothing-option button{font-size:.75rem;min-height:30px}
+.clothing-option button[aria-pressed="true"]{color:#315e48;border-color:transparent;background:transparent;opacity:1}
 .pace #pace-obstacle{background:#fee5ac;color:#623f16;font-weight:700}
 #trail-extra:empty{display:none}

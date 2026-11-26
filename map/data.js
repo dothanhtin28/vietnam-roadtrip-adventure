@@ -77,5 +77,12 @@ const forage={
  corn:{name:'Ngô',icon:'🌽',food:22,water:0,price:9},
  fruit:{name:'Trái cây rừng',icon:'🍐',food:15,water:10,price:8}
 };
-return {places,roads,modes,geoAnchors,legKilometers,nhoQue,riverPath,toGeo,companions,petPrices,cartFare,energyDrinkPrice,forage};
+const clothing={
+ moss:{name:'Xanh rêu',accent:'#596442',colors:{jacket:[93,106,67],light:[125,135,88],pants:[106,86,66],pantsEdge:[91,78,64]}},
+ indigo:{name:'Chàm cao nguyên',accent:'#465872',colors:{jacket:[69,88,115],light:[96,115,138],cuff:[48,59,79],scarf:[61,78,90],pants:[90,92,83],pantsEdge:[72,77,74]}},
+ ochre:{name:'Áo mưa vàng đất',price:28,accent:'#b18847',colors:{jacket:[169,126,59],light:[194,156,86],cuff:[112,83,48],scarf:[108,96,64],pants:[67,78,78],pantsEdge:[58,68,67]}},
+ brick:{name:'Áo khoác đỏ gạch',price:36,accent:'#9b5244',colors:{jacket:[141,71,59],light:[174,103,86],cuff:[96,57,50],scarf:[113,83,67],pants:[83,90,86],pantsEdge:[70,78,71]}}
+};
+const clothingShops=['start','yen','dong'];
+return {places,roads,modes,geoAnchors,legKilometers,nhoQue,riverPath,toGeo,companions,petPrices,cartFare,energyDrinkPrice,forage,clothing,clothingShops};
 })();

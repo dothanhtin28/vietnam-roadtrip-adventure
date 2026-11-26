@@ -34,7 +34,11 @@
 <div id="map-nav" class="nav"><button id="plus" aria-label="Phóng to">+</button><button id="minus" aria-label="Thu nhỏ">−</button><button id="locate" aria-label="Về vị trí của tôi">◎</button><button id="overview" aria-label="Xem toàn tuyến">▣</button></div>
 <div id="map-caption" class="map-bottom">N ↑ · Sơ đồ game, không dùng dẫn đường <span id="zoom"></span></div>
 </section>
-<aside><div class="card">
+<aside><details class="card wardrobe" id="wardrobe" hidden>
+<summary>Trang phục <span id="current-clothing"></span></summary>
+<div id="clothing-options"></div>
+<button id="preview-clothing" class="subtle" type="button" aria-pressed="false">Xem nhân vật gần hơn</button>
+</details><div class="card">
 <div class="eyebrow" id="place-tag">ĐIỂM DỪNG</div><h2 id="place"></h2>
 <p id="summary"></p><figure id="photo" hidden><img id="image" alt="" referrerpolicy="no-referrer"><figcaption id="credit"></figcaption></figure>
 <div class="actions" id="actions"></div>

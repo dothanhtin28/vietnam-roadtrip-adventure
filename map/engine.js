@@ -1,7 +1,13 @@
 'use strict';
 globalThis.TripEngine = (() => {
-const {places,roads,modes,geoAnchors,legKilometers,companions,petPrices,cartFare,energyDrinkPrice,forage}=TripData;
-const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
+const {places,roads,modes,geoAnchors,legKilometers,companions,petPrices,cartFare,energyDrinkPrice,forage,clothing,clothingShops}=TripData;
+const starterClothing=Object.keys(clothing).filter(id=>!clothing[id].price);
+function wardrobe(saved){
+ const previous=Array.isArray(saved?.owned)?saved.owned.filter(id=>Object.hasOwn(clothing,id)):[];
+ const owned=[...new Set([...starterClothing,...previous])];
+ return {owned,active:owned.includes(saved?.active)?saved.active:'moss'};
+}
+const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],wardrobe:wardrobe(),bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
 const campingStops=new Set(['start','river','yen','dong','nho-que']);
 const canCamp=s=>campingStops.has(places[s.at].id);
 const clamp=(v)=>Math.max(0,Math.min(v,100));
@@ -153,6 +159,18 @@ function buyVehicle(s,id){
  s.money-=v.price;s.owned.push(id);s.mode=id;return true;
 }
 function setVehicle(s,id){if(!s.owned.includes(id)||!modes[id])return false;s.mode=id;return true;}
+function equipClothing(s,id){
+ if(!s.wardrobe.owned.includes(id))return false;
+ s.wardrobe.active=id;return true;
+}
+const sellsClothing=s=>clothingShops.includes(places[s.at].id);
+function buyClothing(s,id){
+ if(!Object.hasOwn(clothing,id))return false;
+ const price=clothing[id].price;
+ if(!price||!sellsClothing(s)||s.money<price||s.wardrobe.owned.includes(id))return false;
+ s.money-=price;s.wardrobe.owned.push(id);
+ return equipClothing(s,id);
+}
 const depots=places.flatMap((p,i)=>p.services?.includes('help')?[i]:[]);
 function needsRescue(s){return !depots.some(i=>i!==s.at&&canTravel(s,trip(s.at,i,'walk')));}
 function rescue(s){
@@ -301,5 +319,5 @@ function catchFish(s,elapsed){
  if(elapsed>=1250&&elapsed<=2450){s.bag.fish+=2;return 'Câu được 2 cá. Mang ra chợ bán được 32k.';}
  return 'Cá tuột mất. Thử giật khi phao vừa chìm.';
 }
-return {fresh,time,day,weather,path,length,pointAt,profile,sample,roadPoint,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight,canCamp,forageSpot,collectForage};
+return {fresh,time,day,weather,path,length,pointAt,profile,sample,roadPoint,grade,condition,pace,eta,trip,canTravel,arrive,service,canWork,needsHelp,canFish,catchFish,buyVehicle,setVehicle,needsRescue,rescue,geoPosition,meet,encounter,localPet,petProgress,invite,sellPet,jumpHeight,canCamp,forageSpot,collectForage,wardrobe,buyClothing,equipClothing,sellsClothing};
 })();
