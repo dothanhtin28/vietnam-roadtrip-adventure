@@ -7,7 +7,7 @@ function wardrobe(saved){
  const owned=[...new Set([...starterClothing,...previous])];
  return {owned,active:owned.includes(saved?.active)?saved.active:'trail'};
 }
-const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,money:45,clock:450,mode:'walk',owned:['walk'],wardrobe:wardrobe(),bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
+const fresh=()=>({at:0,food:84,water:88,energy:91,health:100,clean:82,money:45,clock:450,mode:'walk',owned:['walk'],wardrobe:wardrobe(),bag:{meals:1,bottles:1,treats:1,fish:0,meds:0,energyDrinks:0,mushrooms:0,corn:0,fruit:0},foraged:{},boostUntil:0,campAt:null,photos:[],pets:{dog:0,cat:0},jobs:{},casts:0,meetings:{},companion:null});
 const campingStops=new Set(['start','river','yen','dong','nho-que']);
 const canCamp=s=>campingStops.has(places[s.at].id);
 const clamp=(v)=>Math.max(0,Math.min(v,100));
@@ -112,7 +112,7 @@ function roadPoint(profile,d,offset){
 }
 function condition(s,plan,d,damage=0){
  const f=plan.distance?bound(d/plan.distance,0,1):0;
- return {food:clamp(s.food-plan.food*f),water:clamp(s.water-plan.water*f),energy:clamp(s.energy-plan.energy*f),health:clamp(s.health-damage)};
+ return {food:clamp(s.food-plan.food*f),water:clamp(s.water-plan.water*f),energy:clamp(s.energy-plan.energy*f),health:clamp(s.health-damage),clean:clamp((s.clean??82)-(plan.dirt??0)*f)};
 }
 function pace(plan,d,s,damage=0,direction=1,clock=s.clock){
  const slope=grade(plan.profile,d)*direction,v=condition(s,plan,d,damage);
@@ -143,15 +143,16 @@ function trip(from,to,mode){
  }
  const v=modes[mode]||modes.walk, motor=v.fuel>0,cart=mode==='cart';
  const hireAvailable=cart&&Math.abs(from-to)===1&&places[from].services?.includes('garage')&&!footOnly;
- return {points,profile:course,mode,footOnly,hireAvailable,distance,km,food:Math.ceil(weighted/(motor||cart?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor||cart?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),fuel:cart?cartFare:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(km*60/v.kmh),speed:v.kmh,hazards,impact:v.impact};
+ return {points,profile:course,mode,footOnly,hireAvailable,distance,km,food:Math.ceil(weighted/(motor||cart?72:mode==='bike'?48:40)),water:Math.ceil(weighted/(motor||cart?58:mode==='bike'?35:31)),energy:Math.ceil(weighted/v.energy),dirt:Math.ceil(weighted/(motor?57:29)),fuel:cart?cartFare:motor?Math.ceil(weighted/280)*v.fuel:0,minutes:Math.ceil(km*60/v.kmh),speed:v.kmh,hazards,impact:v.impact};
 }
-function apply(s,{food=0,water=0,energy=0,health=0,minutes=0}){
+function apply(s,{food=0,water=0,energy=0,health=0,clean=0,minutes=0}){
  s.food=clamp(s.food+food);s.water=clamp(s.water+water);s.energy=clamp(s.energy+energy);s.health=clamp(s.health+health);s.clock+=minutes;
+ s.clean=clamp((s.clean??82)+clean);
 }
 const canTravel=(s,t)=>(!t.footOnly||t.mode==='walk')&&(t.mode!=='cart'||t.hireAvailable)&&s.food>=t.food&&s.water>=t.water&&s.energy>=t.energy&&s.money>=t.fuel&&s.health>0;
 function arrive(s,to,t,extra=0,damage=0,roadMinutes=t.minutes){
  if(!canTravel(s,t)||damage>=s.health)return false;
- apply(s,{food:-t.food,water:-t.water,energy:-t.energy,health:-damage,minutes:Math.ceil(roadMinutes)+extra});s.money-=t.fuel;s.at=to;return true;
+ apply(s,{food:-t.food,water:-t.water,energy:-t.energy,health:-damage,clean:-(t.dirt??0),minutes:Math.ceil(roadMinutes)+extra});s.money-=t.fuel;s.at=to;return true;
 }
 function buyVehicle(s,id){
  const v=modes[id];
@@ -237,6 +238,12 @@ function service(s,a,clock=s.clock){
  switch(a){
  case 'meal': if(s.bag.meals){s.bag.meals--;apply(s,{food:42});return 'Ăn cơm: +42 no bụng.';}return 'Trong túi không có cơm.';
  case 'drink': if(s.bag.bottles){s.bag.bottles--;apply(s,{water:48});return 'Uống nước: +48 đủ nước.';}return 'Trong túi không có nước.';
+ case 'shower':
+  if(!at('rest'))return 'Có thể tắm ở trạm nghỉ.';
+  apply(s,{clean:100,energy:5,minutes:15});return 'Đã tắm ở trạm. Sạch sẽ đầy, hồi 5 thể lực.';
+ case 'bathe':
+  if(!place.bath)return 'Hãy tìm điểm tắm suối, ao hoặc hồ trên tuyến.';
+  apply(s,{clean:60,energy:8,minutes:25});return 'Đã tắm ở '+({stream:'suối',pond:'ao',lake:'hồ'}[place.bath])+'. +60 sạch sẽ, +8 thể lực.';
  case 'buyMeal': return at('shop')?buy('meals',18):'Cần đến quán.';
  case 'buyWater': return at('shop')?buy('bottles',8):'Cần đến quán.';
  case 'buyEnergyDrink': return at('shop')?buy('energyDrinks',energyDrinkPrice):'Cần đến quán.';

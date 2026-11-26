@@ -14,6 +14,7 @@ function load(){
    s.foraged=s.foraged&&typeof s.foraged==='object'&&!Array.isArray(s.foraged)?s.foraged:{};
    s.boostUntil=Number.isFinite(s.boostUntil)?s.boostUntil:0;
    s.wardrobe=E.wardrobe(s.wardrobe);
+   s.clean=Number.isFinite(s.clean)?Math.max(0,Math.min(100,s.clean)):82;
    s.social=S.restore(s.social);
    s.campAt=s.campAt===s.at&&E.canCamp(s)?s.at:null;
    return s;
@@ -27,6 +28,7 @@ const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const scene=globalThis.TripScene3D?.attach($('canvas3d'))??null;
 let in3d=false,geographic=false,orbit=0,look=0,viewpoint=false,lastDraw=0,cameraDrag=null,aside=0,needRelease=false,blocked='',motion=false,steerPose=0,speedPose=0,activity=null;
 let throttleRamp=0,lastThrottle=0,actualSpeed=0,speedKmh=0,jump=null,jumpRequested=false;
+let walkVelocity=0;
 let openHost=null,auto=false;
 let socialGuest=null,socialScene=null,socialResponse='';
 let clothingPreview=false;
@@ -38,7 +40,7 @@ function setAuto(on){
  auto=on;const button=$('auto-walk');
  button.setAttribute('aria-pressed',String(on));button.textContent=on?'Dừng tự đi':'Tự đi';
 }
-function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;jump=null;jumpRequested=false;setAuto(false);}
+function clearDrive(){keys.clear();buttons.clear();for(const dir of ['left','forward','back','right'])$('drive-'+dir).setAttribute('aria-pressed','false');motion=false;walkVelocity=0;steerPose=0;jump=null;jumpRequested=false;setAuto(false);}
 const fullRoute=E.profile(0,places.length-1);
 const previewRoute=()=>E.profile(s.at,s.at<places.length-1?s.at+1:s.at-1);
 let idleRoute=previewRoute();
@@ -75,6 +77,7 @@ function tryPickup(){
 function turnAround(){
  if(!in3d||!travel||jump)return;
  setAuto(false);
+ walkVelocity=0;steerPose=0;
  travel.heading=-travel.facing;
  travel.facing=travel.heading;
  orbit=0;viewpoint=false;look=0;
@@ -217,7 +220,7 @@ canvas.addEventListener('pointermove',e=>{
 });
 ['pointerup','pointercancel','lostpointercapture'].forEach(k=>canvas.addEventListener(k,e=>{if(cameraDrag?.id===e.pointerId)cameraDrag=null;}));
 let lastStats=NaN;
-function meters(v){['food','water','energy','health'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
+function meters(v){['food','water','energy','health','clean'].forEach(k=>{$(k).value=v[k];$(k).title=Math.round(v[k])+'/100';});}
 function animate(kind,seconds){activity={kind,at:performance.now(),until:performance.now()+seconds*1000};}
 function updateStats(){
  const t=travel,clock=Math.floor(gameClock()),weather=E.weather(clock);
@@ -249,8 +252,8 @@ function drawScene(ms){
   $('mini-route').innerHTML=svgLine(fullRoute.map(v=>[v.x,v.z]),'stroke="#739785" stroke-width="22"')+svgLine(route.map(v=>[v.x,v.z]),'stroke="#325f50" stroke-width="12"')+'<circle id="mini-marker" r="28" fill="#f0c476" stroke="#244b40" stroke-width="9"/>';
  }
  const dot=$('mini-marker');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.z);
- scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,detained:Boolean(s.social.detained),offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
-  action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
+ scene.render({route,d,mode:activeMode(),moving:motion,clothing:s.wardrobe.active,clothingPreview,socialGuests:socialScene,detained:Boolean(s.social.detained),bathSite:t?null:places[s.at].bath,offset:aside,speed:speedPose,actualSpeed,viewDirection:t?.facing,jump:jump?.phase??null,steer:steerPose,seconds:ms/1000,orbit,look,viewpoint,camping:s.campAt===s.at,pickup:t?.pickup,reduced,clock:gameClock(),weather:E.weather(gameClock()),
+  action:cast?'fish':activity&&ms<activity.until?activity.kind:'',actionTime:cast?(ms-cast.start)/1000:activity?(ms-activity.at)/1000:0,actionDuration:activity?(activity.until-activity.at)/1000:0,hazard:t?.plan.hazards[t.nextHazard],damage:ms<hit,pets:Object.keys(s.pets).filter(k=>s.pets[k]===2),companion:companions[s.companion]?.outfit});
 }
 let showText='Giữ W hoặc nút ▲ để tự lên đường.';
 function say(text){showText=text;$('message').textContent=text;}
@@ -343,17 +346,34 @@ function route(plan,progress=0){
 function action(label,fn,disabled=false){
  const b=dom('button',label);b.type='button';b.disabled=disabled;b.addEventListener('click',fn);$('actions').append(b);
 }
-const servicesAnimation={meal:['meal',2.5],drink:['drink',2],energyDrink:['drink',2],nap:['rest',3.2],camp:['rest',3.2],photo:['photo',1.7]};
+const servicesAnimation={meal:['meal',2.5],drink:['drink',2],energyDrink:['drink',2],nap:['rest',3.2],camp:['rest',3.2],photo:['photo',1.7],shower:['shower',7.5],bathe:['bath',8]};
+const bathNames={lake:'Tắm hồ',stream:'Tắm suối',pond:'Tắm ao'};
+function animateSupply(kind){
+ if(Object.hasOwn(forage,kind))animate('snack',2);
+ else if(servicesAnimation[kind])animate(...servicesAnimation[kind]);
+}
 function service(k){
- const allowed=(k==='meal'&&s.bag.meals)||(k==='drink'&&s.bag.bottles)||(k==='energyDrink'&&s.bag.energyDrinks&&s.clock>=s.boostUntil)||k==='nap'||(k==='camp'&&s.money>=15)||(k==='photo'&&places[s.at].photo&&!s.photos.includes(places[s.at].id));
- say(E.service(s,k));if(allowed&&servicesAnimation[k])animate(...servicesAnimation[k]);save();render();
+ const place=places[s.at];
+ const allowed=(k==='meal'&&s.bag.meals)||(k==='drink'&&s.bag.bottles)||(k==='energyDrink'&&s.bag.energyDrinks&&s.clock>=s.boostUntil)||k==='nap'||(k==='camp'&&s.money>=15)||(k==='photo'&&place.photo&&!s.photos.includes(place.id))||(k==='shower'&&place.services?.includes('rest'))||(k==='bathe'&&place.bath)||(Object.hasOwn(forage,k)&&s.bag[k]);
+ say(E.service(s,k));
+ if(allowed){
+  if((k==='shower'||k==='bathe')&&!in3d&&scene)setView(true);
+  if(k==='shower'||k==='bathe'){clearDrive();clothingPreview=false;viewpoint=false;orbit=0;look=0;}
+  animateSupply(k);
+ }
+ save();render();
 }
 function useSupply(kind){
  if(!travel){service(kind);return;}
  const before=currentCondition(),after={...s,...before};
+ const bagKey={meal:'meals',drink:'bottles',energyDrink:'energyDrinks'}[kind]??kind;
+ const previous=s.bag[bagKey];
  say(E.service(after,kind,gameClock()));
  for(const stat of vitals)s[stat]+=after[stat]-before[stat];
  s.boostUntil=after.boostUntil;
+ if(s.bag[bagKey]<previous&&kind!=='med'){
+  clearDrive();animateSupply(kind);
+ }
  render();
 }
 function supplyActions(){
@@ -390,7 +410,7 @@ function travelStart(direction,mode=s.mode){
  say(mode==='cart'?'Xe bò đã sẵn sàng. Giữ W hoặc ▲ để đi, trả tiền khi tới nơi.':'Đang hướng tới '+places[to].name+'. Nhả phím để dừng.');render();
 }
 function finishTravel(){
- const t=travel;travel=null;aside=0;motion=false;needRelease=true;
+ const t=travel;travel=null;aside=0;motion=false;needRelease=true;walkVelocity=0;steerPose=0;
  setAuto(false);
  if(!E.arrive(s,t.to,t.plan,0,t.damage,t.roadMinutes)){say('Không thể hoàn thành chặng.');render();return;}
  selected=s.at;idleRoute=previewRoute();E.meet(s);save();
@@ -583,7 +603,11 @@ function render(){
     },!E.canTravel(s,E.trip(s.at,s.at+1,'cart')));
    }
   }
-  if(p.services?.includes('rest'))action('Ngủ tại trạm · 15k',()=>service('camp'),s.money<15);
+  if(p.services?.includes('rest')){
+   action('Tắm ở trạm',()=>service('shower'));
+   action('Ngủ tại trạm · 15k',()=>service('camp'),s.money<15);
+  }
+  if(p.bath)action(bathNames[p.bath],()=>service('bathe'));
   if(E.canCamp(s)){
    if(s.campAt===s.at){
     action('Chờ tối ngắm sao',()=>{service('waitStars');if(!in3d)setView(true);look=.58;});
@@ -600,9 +624,10 @@ function render(){
 }
 function loop(ms){
  const dt=Math.min(.075,Math.max(0,(ms-(last||ms))/1000));last=ms;
- if(auto&&belowAutoThreshold()){setAuto(false);say('Đã dừng tự đi: có chỉ số dưới 30%. Dùng đồ tiếp tế trong túi.');}
+ if(auto&&belowAutoThreshold()){setAuto(false);walkVelocity=0;steerPose=0;say('Đã dừng tự đi: có chỉ số dưới 30%. Dùng đồ tiếp tế trong túi.');}
  const manual=Number(pressing('forward'))-Number(pressing('back'));
- const drive=in3d&&!cast?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
+ const bathing=ms<(activity?.until??0)&&(activity.kind==='bath'||activity.kind==='shower');
+ const drive=in3d&&!cast&&!bathing?(manual||(auto?(travel?.direction??(s.at===places.length-1?-1:1)):0)):0;
  motion=false;actualSpeed=0;speedKmh=0;
  if(!drive){needRelease=false;blocked='';}
  if(!travel&&drive&&!needRelease)travelStart(drive);
@@ -618,7 +643,7 @@ function loop(ms){
  steerPose+=(steering-steerPose)*(1-Math.exp(-dt*13));
  if(auto&&input>0&&mode==='walk'&&obstacleDistance>1.6&&obstacleDistance<=2.2)jumpRequested=true;
  if(jumpRequested&&in3d&&!cast&&mode==='walk'&&!jump&&(!activity||ms>=activity.until)&&(!travel||ms>=travel.holdUntil)){
-  jump={phase:0,direction:input};
+  jump={phase:-.075/jumpDuration,direction:input};
  }
  jumpRequested=false;
  const oldJump=jump?.phase??null;
@@ -631,20 +656,32 @@ function loop(ms){
   const oldOffset=aside;
   const lateral=mode==='walk'?1.95:3.5+3.2*Math.abs(steerPose);
   const limit=t.plan.footOnly?1:5.6;
-  aside=Math.max(-limit,Math.min(limit,aside+steering*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
+  const lateralInput=mode==='walk'?Math.abs(steerPose)>.025?steerPose:0:steering;
+  aside=Math.max(-limit,Math.min(limit,aside+lateralInput*lateral*(1-.18*weather.mud)*(jump?.22:1)*dt));
   motion=aside!==oldOffset;
-  if(throttle&&ms>=t.holdUntil){
-   t.facing=Math.sign(throttle);
-   t.throttle=throttle;
-   const qty=E.pace(t.plan,t.d,s,t.damage,throttle,clock);speedPose=qty.speed/t.plan.speed;
-   throttleRamp=Math.min(1,throttleRamp+dt/(mode==='walk'?.29:.49));
+  const walk=mode==='walk';
+  const direction=throttle||(walk?Math.sign(walkVelocity):0);
+  if(direction&&ms>=t.holdUntil){
+   const qty=E.pace(t.plan,t.d,s,t.damage,direction,clock);
    const strideSpeed=qty.speed*worldUnitsPerKmh;
-   const groundedSpeed=strideSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp))*(throttle!==t.heading?.58:1)*(Math.abs(aside)>3.7?.76:1);
-   const speed=jump?Math.max(groundedSpeed,5.15*(1-weather.mud*.15)):groundedSpeed;
-   t.d=Math.max(0,Math.min(t.plan.distance,t.d+throttle*speed*dt));
+   const groundedSpeed=strideSpeed*(direction!==t.heading?.58:1)*(Math.abs(aside)>3.7?.76:1);
+   let velocity;
+   if(walk){
+    const airborne=jump&&jump.phase>=0;
+    const target=throttle*(airborne?Math.max(groundedSpeed,5.15*(1-weather.mud*.15)):groundedSpeed*(jump?.8:1));
+    const rate=airborne?26:!throttle||Math.sign(walkVelocity)===-throttle?14:9;
+    walkVelocity+=Math.max(-rate*dt,Math.min(rate*dt,target-walkVelocity));
+    velocity=walkVelocity;
+   }else{
+    throttleRamp=Math.min(1,throttleRamp+dt/.49);
+    velocity=throttle*groundedSpeed*(.18+.82*throttleRamp*throttleRamp*(3-2*throttleRamp));
+   }
+   if(velocity!==0){t.facing=Math.sign(velocity);t.throttle=t.facing;}
+   t.d=Math.max(0,Math.min(t.plan.distance,t.d+velocity*dt));
    motion=motion||t.d!==prior;
    actualSpeed=dt?(t.d-prior)/dt:0;
    speedKmh=Math.abs(actualSpeed)/worldUnitsPerKmh;
+   speedPose=speedKmh/t.plan.speed;
    const next=t.plan.hazards[t.nextHazard];
    if(next&&!t.warned&&next.at-t.d<(mode==='walk'?10:36)){
     t.warned=true;say(next.name+' phía trước. '+(mode==='walk'?'Nhảy khi hiện nhắc Space, hoặc né bằng A/D.':'Né hẳn sang trái hoặc phải bằng A/D.'));
@@ -657,16 +694,16 @@ function loop(ms){
     else if(height>=next.height)say('Đã nhảy qua chướng ngại.');
     else{
      const damage=Math.min(t.plan.impact,Math.max(0,s.health-t.damage-1));
-     t.damage+=damage;hit=performance.now()+700;t.holdUntil=ms+600;throttleRamp=0;jump=null;
+     t.damage+=damage;hit=performance.now()+700;t.holdUntil=ms+600;throttleRamp=0;walkVelocity=0;jump=null;
      say('Va chạm! −'+damage+' máu. Anh có thể đi tiếp sau khi đứng lại một nhịp.');
     }
    }
    if(speedKmh>0)t.roadMinutes+=60*t.plan.km*Math.abs(t.d-prior)/(t.plan.distance*Math.min(speedKmh,qty.speed));
    if(t.d!==prior)pickupNearby(2.6);
    if(t.d>=t.plan.distance)finishTravel();
-   else if(t.d===0&&throttle<0){
+   else if(t.d===0&&velocity<0){
     for(const stat of ['food','water','energy'])s[stat]=Math.min(100,s[stat]);
-    s.health=Math.max(1,Math.min(100,s.health-t.damage));s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;setAuto(false);
+    s.health=Math.max(1,Math.min(100,s.health-t.damage));s.clock+=Math.ceil(t.roadMinutes);travel=null;aside=0;needRelease=true;motion=false;walkVelocity=0;steerPose=0;setAuto(false);
     save();say('Đã quay về '+places[s.at].name+'.');render();
    }
   }

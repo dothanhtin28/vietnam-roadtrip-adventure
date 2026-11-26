@@ -7,7 +7,8 @@ main{max-width:1290px;margin:auto;padding:18px clamp(10px,3vw,30px)}
 header{display:flex;align-items:end;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 0 9px;gap:12px} header a{white-space:nowrap}
 h1,h2{font-family:var(--display);line-height:1.13;margin:.2em 0}h1{font-size:clamp(1.55rem,4.3vw,3rem)}h2{font-size:clamp(1.65rem,3vw,2.25rem)}
 .eyebrow{color:#486354;font-size:.69rem;font-weight:850;letter-spacing:.12em}a{color:#18574a}
-.status{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:10px 0}
+.status{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:10px 0}
+@media(max-width:500px){.status{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .status>div{padding:7px 10px;background:#fff9e8;border:1px solid var(--border);border-radius:9px;display:flex;flex-direction:column;min-width:0}
 .status span{font-weight:800;color:#46604f;font-size:.62rem}.status meter{width:100%;height:16px;accent-color:#448776}.status b{font-size:.9rem;font-variant-numeric:tabular-nums}
 .layout{display:grid;grid-template-columns:2.1fr 1fr;gap:12px;align-items:start}

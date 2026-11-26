@@ -10,6 +10,7 @@ Mở `index.html` sau khi pull. Game mở ở góc nhìn 3D và chạy bằng HT
 - Nhân vật dùng mesh 3D bo và khớp thủ tục trong `map/hiker3d.js`. Balo, dây đeo, bình nước, giày, tóc và gương mặt là hình học 3D, không dùng sprite; camera gần hơn và có độ trễ khi bám. Đi bộ, chạy nhẹ, xoay người, đứng thở, câu cá, ăn, uống, ngồi nghỉ và chụp ảnh có pose/hoạt ảnh riêng. Đây là renderer Canvas hiện tại, chưa dùng GLB hoặc skinning chuẩn glTF.
 
 ## Hoạt động dọc đường
+- Nút ăn và uống trong túi có động tác riêng, kể cả khi dừng giữa chặng. Đi đường làm giảm sạch sẽ. Có thể tắm ở trạm nghỉ, hồ nhỏ ở Hà Giang, suối bên bến sông Lô hoặc ao đầu bản.
 - Ghé sân cà phê Hà Giang, phố quán Yên Minh hoặc sân chợ Đồng Văn để giao lưu với các nhà sáng tạo hư cấu. Chào hỏi, ăn cùng và đi chơi giúp tăng độ thân thiết để mở quay clip. Nếu có cãi vã, can ngăn giúp tăng uy tín. Gây gổ có thể làm chuyến đi dừng ở trạm cảnh sát.
 - Mở **Trang phục** tại điểm dừng để mặc bộ đã sở hữu hoặc xem nhân vật ở góc gần. Cam đường đèo là bộ mặc định của chuyến mới. Xanh rêu và Chàm cao nguyên cũng có sẵn. Hà Giang, Yên Minh và Chợ Đồng Văn có bán trang phục mới.
 - Kéo để dời bản đồ. Cuộn chuột, chụm hai ngón hoặc dùng nút +/− để zoom. Nút ◎ về vị trí hiện tại, ▣ mở toàn tuyến.

@@ -3,9 +3,9 @@ globalThis.TripData = (() => {
 const commons='https://commons.wikimedia.org/wiki/File:';
 const lic='https://creativecommons.org/licenses/by-sa/4.0/';
 const places=[
- {id:'start',x:192,y:870,icon:'⌂',name:'Hà Giang',kind:'Trạm xuất phát',description:'Đường lên cao nguyên bắt đầu ở đây. Trạm có nước, cơm và chỗ nghỉ.',services:['shop','garage','rest','help']},
- {id:'river',x:333,y:736,icon:'🎣',name:'Bến sông Lô',kind:'Câu cá',description:'Thả câu, đợi phao chìm rồi giật đúng lúc. Mang cá tới chợ để bán.',services:['fish']},
- {id:'dog',x:456,y:621,icon:'🐕',name:'Lối qua bản',kind:'Gặp bạn đường',description:'Một chú chó đứng xa bên bờ ruộng. Bên đường có nhà bác Mẩy, nơi khách qua bản có thể ghé hỏi mua cơm nước.',pet:'dog',services:['shop'],host:{name:'bác Mẩy',greeting:'Đi đường xa à? Nhà bác có cơm, nước và ít đồ tiếp sức.'}},
+ {id:'start',x:192,y:870,icon:'⌂',name:'Hà Giang',kind:'Trạm xuất phát',description:'Đường lên cao nguyên bắt đầu ở đây. Trạm có cơm nước, chỗ nghỉ và lối xuống hồ nhỏ.',bath:'lake',services:['shop','garage','rest','help']},
+ {id:'river',x:333,y:736,icon:'🎣',name:'Bến sông Lô',kind:'Câu cá',description:'Thả câu hoặc ghé đoạn suối nông bên bến để tắm. Có thể mang cá tới chợ để bán.',bath:'stream',services:['fish']},
+ {id:'dog',x:456,y:621,icon:'🐕',name:'Lối qua bản',kind:'Gặp bạn đường',description:'Một chú chó đứng xa bên bờ ruộng. Bên đường có ao đầu bản và nhà bác Mẩy bán cơm nước.',bath:'pond',pet:'dog',services:['shop'],host:{name:'bác Mẩy',greeting:'Đi đường xa à? Nhà bác có cơm, nước và ít đồ tiếp sức.'}},
  {id:'quan',x:532,y:505,icon:'📷',name:'Núi Đôi Quản Bạ',kind:'Check-in · thiên nhiên',description:'Hai đỉnh núi tròn nổi lên giữa thung lũng. Ghé tới để lưu ảnh vào hành trình.',photo:{url:'https://upload.wikimedia.org/wikipedia/commons/3/36/Ha_Giang_Province.jpg',file:commons+'Ha_Giang_Province.jpg',author:'Thietkeweb123',license:'CC BY-SA 4.0',licenseUrl:lic}},
  {id:'yen',x:790,y:385,icon:'♨',name:'Yên Minh',kind:'Trạm tiếp tế · việc làm',description:'Quán ven đường cần người phụ dọn bàn. Có thể kiếm tiền, mua đồ và nghỉ qua đêm.',services:['job','shop','garage','rest','help']},
  {id:'cat',x:934,y:264,icon:'🐈',name:'Ngõ nhỏ cao nguyên',kind:'Gặp bạn đường',description:'Một con mèo nằm trên tường đá cạnh nhà cô Lan. Cô có bán cơm nước cho người đi đường.',pet:'cat',services:['shop'],host:{name:'cô Lan',greeting:'Mời ghé nghỉ chân. Cô có cơm nóng, nước và đồ tiếp sức cho chặng đèo.'}},

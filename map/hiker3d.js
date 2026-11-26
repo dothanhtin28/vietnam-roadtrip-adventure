@@ -2,6 +2,7 @@
 'use strict';
 globalThis.WindHiker=(()=>{
  const PI=Math.PI, TAU=2*PI, mix=(a,b,t)=>a+(b-a)*t, clamp=(v,a,b)=>Math.min(Math.max(v,a),b);
+ const ease=t=>t*t*(3-2*t);
  const plus=(a,b)=>a.map((v,i)=>v+b[i]), sub=(a,b)=>a.map((v,i)=>v-b[i]), times=(a,m)=>a.map(v=>v*m);
  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
  const unit=a=>times(a,1/(Math.hypot(...a)||1)), dot=(a,b)=>a.reduce((r,v,i)=>r+v*b[i],0);
@@ -28,7 +29,10 @@ globalThis.WindHiker=(()=>{
    [F.pants,'canvas'],[F.pantsEdge,'canvas'],[F.shoe,'leather'],[F.greenDark,'cordura'],[F.green,'cordura']
   ]):null;
   const tilt=pose.lean, slant=(p)=>{
-   const y=p[1]-1.14,roll=pose.roll;return [p[0]*Math.cos(roll)+y*Math.sin(roll),1.14+y*Math.cos(roll)-p[0]*Math.sin(roll)+pose.bob,p[2]+y*tilt];
+   const y=p[1]-1.14,roll=pose.roll,twist=pose.twist*clamp(y/.65,0,1);
+   const x=p[0]*Math.cos(twist)+p[2]*Math.sin(twist);
+   const z=p[2]*Math.cos(twist)-p[0]*Math.sin(twist);
+   return [x*Math.cos(roll)+y*Math.sin(roll)+pose.hipShift,1.14+y*Math.cos(roll)-x*Math.sin(roll)+pose.bob,z+y*tilt];
   };
   function emit(q,c,darken=1,normal=null){
    const n=normal??unit(cross(sub(q[1],q[0]),sub(q[2],q[0])));
@@ -161,7 +165,7 @@ globalThis.WindHiker=(()=>{
   limb(head([.006,2.062,.188]),head([.043,2.080,.174]),.006,.004,[132,76,61],6);
   // Moss-green rucksack with a rounded sleeping roll, shoulder straps, a
   // closure flap, woven detail, buckles and a bottle in one side pocket.
-  if(!local){
+  if(!local&&pose.washing<.25){
   const pack=p=>upper([p[0]+pose.pack*(p[1]-1.1)*.08,p[1]+pose.pack*.013,p[2]+pose.pack*.032]);
   loft([[0,1.07,-.251,.153,.092],[0,1.13,-.303,.233,.153],[0,1.37,-.324,.267,.175],[0,1.62,-.322,.259,.164],[0,1.77,-.294,.221,.131],[0,1.83,-.258,.151,.084]],F.greenDark,12,pack);
   loft([[0,1.24,-.426,.123,.057],[0,1.30,-.447,.203,.088],[0,1.47,-.448,.207,.077],[0,1.55,-.420,.170,.053]],F.green,10,pack);
@@ -245,7 +249,7 @@ globalThis.WindHiker=(()=>{
    blob(plus(rim,[0,0,.013]),.039,.038,.013,[43,64,70],8,transform);
    blob(plus(rim,[-.015,.013,.025]),.012,.011,.004,[117,160,166],6,transform);
   }
-  if(hero&&!(act==='photo'&&pose.activity>.12)){
+  if(hero&&pose.washing<.25&&!(act==='photo'&&pose.activity>.12)){
    const body=[pose.pack*.019,1.42+pose.pack*.008,.262];
    for(const side of [-1,1])limb(upper([side*.101,1.918,.150]),upper([body[0]+side*.114,body[1]+.038,.258]),.011,.012,F.sole,6);
    camera(body,upper);
@@ -271,12 +275,17 @@ globalThis.WindHiker=(()=>{
     const float=plus(tip,[.02,-.63,1.12]);
     limb(tip,float,.0035,.0035,F.white,6);blob(float,.036,.056,.036,[217,106,61],6);
    }else if(act==='drink'){
-    const b=plus(hand,[.022,.081,.019]);limb(b,plus(b,[0,.14,.075]),.057,.047,F.bottle,8);
-    blob(plus(b,[0,.163,.083]),.045,.027,.045,F.metal,6);
+    const b=plus(hand,[.022,.065,.028]),cap=plus(b,[0,.155*(1-pose.sip*.7),.023-pose.sip*.141]);
+    limb(b,cap,.052,.041,F.bottle,8);
+    blob(cap,.042,.024,.042,F.metal,8);
    }else if(act==='meal'){
     const bowl=plus(left,[.036,.024,.054]);blob(bowl,.115,.062,.111,F.shoe,10);
     blob(plus(bowl,[0,.033,0]),.096,.036,.093,F.white,8);
     limb(hand,plus(hand,[-.09,.065,.086]),.012,.011,F.trim,6);
+   }else if(act==='snack'){
+    const bite=plus(hand,[-.010,.071,.025]),size=pose.bite>.8?.046:.063;
+    blob(bite,size,size*.88,size,[194,117,43],8);
+    limb(plus(bite,[0,.02,0]),plus(bite,[.014,.064,.005]),.011,.005,F.green,6);
    }else if(act==='photo'){
     camera(plus(between(left,hand,.5),[0,.036,.032]));
    }
@@ -284,72 +293,120 @@ globalThis.WindHiker=(()=>{
  }
  function create(gaitOffset=0){
   let phase=gaitOffset,blend=0,run=0,mixActivity=0,lastAction='',faceYaw=0;
-  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,reduced=false,trekking=false,distance=Math.abs(actualSpeed)*dt,scale=1,jump=null}){
+  let previousFeet=null,settle=null,wasWalking=false,lastJump=null,landing=1,pivot=0,pivotPhase=0;
+  return {pose({moving=false,mode='walk',speed=0,actualSpeed=0,seconds=0,dt=.033,action='',actionTime=0,turn=0,turnDelta=0,reduced=false,trekking=false,distance=Math.abs(actualSpeed)*dt,scale=1,jump=null}){
    dt=clamp(dt,0,.08);
    const damp=(k)=>1-Math.exp(-dt*k);
    const rolling=mode!=='walk',stance=.64,stride=rolling?.23:.49;
-   const effort=clamp(Math.abs(actualSpeed)/(rolling?26:2.5),0,1.25);
-   blend=mix(blend,moving?1:0,damp(moving?14:17));
+   const walking=moving&&!rolling&&jump===null;
+   const effort=clamp(Math.max(Math.abs(actualSpeed),dt>0?distance/dt:0)/(rolling?26:2.5),0,1.25);
+   blend=mix(blend,moving?rolling?1:clamp(.25+.76*effort,.25,1):0,damp(moving?12:11));
    run=mix(run,clamp((speed-1.015)*6,0,1)*Math.min(1,effort),damp(5));
    // A full planted stroke moves from +stride to -stride. Advancing this
    // phase by distance cancels the player's forward motion during stance.
    if(moving&&jump===null)phase=(phase+(rolling?dt*8.5:distance*TAU*stance/(2*stride*scale)))%TAU;
    if(action)lastAction=action;
-   mixActivity=mix(mixActivity,action?1:0,damp(action?8:5));faceYaw=mix(faceYaw,clamp(turn,-.6,.6)*.45,damp(6));
+   mixActivity=mix(mixActivity,action?1:0,damp(action?8:5));
+   faceYaw=mix(faceYaw,clamp(turn*.24+turnDelta*6,-.32,.32),damp(7));
    const actions={rest:lastAction==='rest'?mixActivity:0};
+   const washing=lastAction==='bath'||lastAction==='shower'?mixActivity:0;
+   const sip=lastAction==='drink'?ease(clamp(actionTime/.69,0,1))*(1-ease(clamp((actionTime-1.22)/.62,0,1)))*mixActivity:0;
+   const bite=ease(clamp((actionTime-.22)/.58,0,1))*(1-ease(clamp((actionTime-1.04)/.48,0,1)));
+   if(jump===null&&lastJump!==null&&lastJump>=.78)landing=0;
+   else landing=Math.min(1,landing+dt/.30);
+   lastJump=jump;
+   const turning=!moving&&!rolling&&jump===null?clamp(Math.abs(turnDelta)/Math.max(dt,.016)/3.8,0,1):0;
+   pivot=mix(pivot,turning,damp(14));pivotPhase+=Math.abs(turnDelta)*4.8;
+   if(walking||rolling||jump!==null||actions.rest>.01||turning>.12)settle=null;
+   else if(wasWalking&&previousFeet){
+    const [left,right]=previousFeet;
+    const first=left.ankle[1]-right.ankle[1]>.03||left.ankle[1]>=right.ankle[1]-.03&&left.ankle[2]<right.ankle[2]?0:1;
+    settle={feet:previousFeet,first,time:0};
+   }
+   wasWalking=walking;
    const sit=actions.rest, breathing=Math.sin(seconds*2.4);
-   const tuck=jump===null?0:Math.sin(jump*PI);
-   const lean=(rolling?.25:.055+run*.19)*blend+tuck*.17;
-   const swing=Math.cos(phase),bob=(reduced?.38:1)*(-Math.cos(phase*2)*blend*.025+breathing*.009);
+   const tuck=jump===null?0:Math.sin(clamp(jump,0,1)*PI);
+   const load=jump!==null&&jump<0?ease(clamp(1+jump*10,0,1))*.105:
+    jump!==null?.105*(1-ease(clamp(jump/.16,0,1))):.145*Math.sin(PI*landing)*(1-landing*.55);
+   const lean=(rolling?.25:.064+run*.16)*blend+tuck*.15+load*.65+washing*.075;
+   const sway=Math.sin(phase+.25);
+   const hipShift=(rolling?0:sway*blend*.052)*(1-sit);
+   const bob=(reduced?.45:1)*(-Math.cos(phase*2+.35)*blend*.029+breathing*.008)-load;
    const hips=1.10-sit*.58-(rolling?.08:0)+bob;
    const feet=[];
    const legs=[-1,1].map(sign=>{
     const t=(phase+(sign===1?PI:0))%TAU/TAU;
     const recovery=clamp((t-stance)/(1-stance),0,1);
-    const fore=(t<stance?1-2*t/stance:-Math.cos(recovery*PI))*stride*blend*(1-sit);
-    const lift=Math.sin(recovery*PI)**1.2*blend*(.36+run*.07)*(1-sit);
+    const followThrough=2*(1-stance)/stance;
+    const swingPath=-1+2*ease(recovery)-followThrough*recovery*(1-recovery)*(1-2*recovery);
+    const fore=(t<stance?1-2*t/stance:swingPath)*stride*blend*(1-sit);
+    const lift=Math.sin(recovery*PI)**1.45*blend*(.285+run*.062)*(1-sit);
     // Land on the heel, pass through a flat stance, then push off the toe.
-    const pitch=rolling?0:(t<stance
-     ?.24*Math.max(0,1-t/.14)**2-.43*clamp((t-.44)/(stance-.44),0,1)**2
-     :mix(-.43,.24,recovery))*blend*(1-sit);
-    feet.push(pitch);
-    const pivot=pitch<0?.245:-.112;
+    let pitch=rolling?0:(t<stance
+     ?.24*(1-ease(clamp(t/.14,0,1)))-.43*ease(clamp((t-.44)/(stance-.44),0,1))
+     :mix(-.43,.24,ease(recovery)))*blend*(1-sit);
+    const footPivot=pitch<0?.245:-.112;
     const pedal=mode==='bike'?blend:0;
-    const foot=[sign*(.153+sit*.086),.123+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift-pivot*Math.sin(pitch)),
+    let foot=[sign*(.153+sit*.086),.123+(rolling?.24+pedal*.15*Math.sin(t*TAU):lift-footPivot*Math.sin(pitch)),
      (rolling?.13+pedal*.23*Math.cos(t*TAU):fore)+sit*.56];
     if(jump!==null){
      foot[1]=mix(foot[1],.41+tuck*(sign===1?.31:.21),tuck);
      foot[2]=mix(foot[2],sign===1?.32:-.25,tuck);
     }
-    const hip=[sign*.158,hips,sit*-.11];
+    if(!moving&&!rolling&&jump===null&&sit<=.01){
+     const index=sign===-1?0:1,wave=Math.sin(pivotPhase+index*PI);
+     foot=[sign*.153,.123+Math.max(0,wave)*pivot*.095,sign*.038+wave*pivot*.115];
+     pitch=wave*pivot*.09;
+     if(settle){
+      const start=settle.feet[index],primary=index===settle.first;
+      const progress=clamp((settle.time-(primary?0:.105))/(primary?.22:.21),0,1);
+      foot=between(start.ankle,foot,ease(progress));
+      foot[1]+=Math.sin(progress*PI)*(primary?.064:.037);
+      pitch=mix(start.pitch,pitch,ease(progress));
+     }
+    }
+    feet.push(pitch);
+    const hip=[sign*.158+hipShift,hips,sit*-.11+sign*sway*blend*.038];
     if(rolling||sit>.01)return [hip,[sign*(.168+sit*.074),mix(.59,.35,sit),foot[2]*.65+.12],foot];
     const rise=hip[1]-foot[1],reach=foot[2]-hip[2],distance=Math.hypot(rise,reach)||1;
     const flex=Math.sqrt(Math.max(0,.56**2-distance**2*.25));
     const knee=[sign*.168,(hip[1]+foot[1])*.5+flex*reach/distance,(hip[2]+foot[2])*.5+flex*rise/distance];
     return [hip,knee,foot];
    });
+   if(settle){settle.time+=dt;if(settle.time>=.32)settle=null;}
+   previousFeet=legs.map((leg,i)=>({ankle:leg[2],pitch:feet[i]}));
    function actionHand(sign,base){
     const t=actionTime,side=sign>0,last=lastAction;
     let to=base;
     if(last==='fish'||last==='reel')to=[sign*(side?.26:.18),1.27+(side?.26:.04)*Math.max(0,Math.sin(t*4)),.48];
-    if(last==='meal')to=side?[.12,1.46+.45*Math.pow(Math.max(0,Math.sin(t*3.65)),1.3),.32]:[-.15,1.43,.37];
-    if(last==='drink')to=side?[.08,1.58+.26*Math.sin(clamp(t,0,1)*PI/2),.241]:base;
+    if(last==='meal')to=side?[.15-.06*bite,1.46+.46*bite,.34-.045*bite]:[-.15,1.43,.37];
+    if(last==='snack')to=side?[.17-.09*bite,1.45+.53*bite,.36-.08*bite]:base;
+    if(last==='drink')to=side?[.14-.058*sip,1.40+.51*sip,.31-.026*sip]:base;
+    if(last==='bath'||last==='shower'){
+     const reach=ease(clamp((Math.sin(t*2.7+(side?0:PI))+.65)/1.65,0,1));
+     to=[sign*(.13+.16*(1-reach)),1.30+.84*reach,.32-.18*reach];
+    }
     if(last==='rest')to=[sign*.26,1.08,.46];
     if(last==='photo')to=[sign*.113,2.069,.313];
-   if(last==='scuffle')to=[sign*.32,1.58+.18*Math.sin(t*5+sign),.35];
+    if(last==='scuffle')to=[sign*.32,1.58+.18*Math.sin(t*5+sign),.35];
     return between(base,to,mixActivity);
    }
    const poles=trekking&&mode==='walk'&&mixActivity<.10;
    const arms=[-1,1].map(sign=>{
-    const strideZ=swing*sign*stride*blend+tuck*.22;
-    const hand=actionHand(sign,[sign*.465,rolling?1.24:poles?1.27:1.085+run*.12,rolling?.49:strideZ+(poles?.21:0)]);
+    const strideZ=Math.cos(phase-.39)*sign*(poles?.38:.29)*blend+tuck*.22+pivot*.055*sign;
+    const flex=Math.max(0,strideZ);
+    const hand=actionHand(sign,[sign*(.425+Math.abs(strideZ)*.075),rolling?1.24:poles?1.27:1.087+run*.08+flex*.33+load,rolling?.49:strideZ+(poles?.21:0)]);
     const elbow=[sign*(.43+(rolling?.03:0)),mix(1.39,(1.54+hand[1])*.5,mixActivity),mix(rolling?.28:strideZ*.49-.066,hand[2]*.5-.08,mixActivity)];
     return [[sign*.347,1.728,0],elbow,hand];
    });
    const blink=1-.93*Math.pow(Math.max(0,Math.cos(seconds*1.37+1.3)),95);
-   const roll=(reduced?.5:1)*(swing*blend*.049+turn*(rolling?.18:.075));
-   return {legs,feet,arms,poles,blink,faceYaw,lean,roll,crouch:sit,actions,pack:swing*blend,lookUp:lastAction==='drink'?mixActivity*.24:0,bob,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4)};
-  },reset(){phase=gaitOffset;blend=0;run=0;mixActivity=0;lastAction='';faceYaw=0;}};
+   const roll=(reduced?.5:1)*(sway*blend*.044+turn*(rolling?.18:.075));
+   const twist=(reduced?.55:1)*(-sway*blend*.095+clamp(turnDelta*5,-.16,.16));
+   return {legs,feet,arms,poles,blink,faceYaw,lean,roll,twist,hipShift,crouch:sit,actions,pack:Math.cos(phase-.31)*blend,lookUp:sip*.24-washing*.10,bob,action:lastAction,activity:mixActivity,castArc:Math.sin(actionTime*4),washing,sip,bite};
+  },reset(){
+   phase=gaitOffset;blend=0;run=0;mixActivity=0;lastAction='';faceYaw=0;
+   previousFeet=null;settle=null;wasWalking=false;lastJump=null;landing=1;pivot=0;pivotPhase=0;
+  }};
  }
  return {create,draw};
 })();

@@ -166,7 +166,8 @@ function attach(canvas){
  let ctx=null;
  try{ctx=canvas.getContext('2d',{alpha:false});}catch{}
  if(!ctx)return null;
- let angle=null,camera=null,lastFrame=null,actorYaw=null,actorPosition=null,zoom=1,wheelAngle=0,wet=null,rain=null,heat=null,dark=null;
+ let angle=null,camera=null,cameraLook=null,lastFrame=null,actorYaw=null,actorPosition=null,yawVelocity=0,zoom=1,wheelAngle=0,wet=null,rain=null,heat=null,dark=null;
+ let densityScale=1,frameAverage=.025,qualityCheck=null;
  const actor=WindHiker.create(),follower=WindHiker.create(Math.PI*.63);
  const image=src=>{
   if(typeof Image==='undefined')return null;
@@ -180,18 +181,39 @@ function attach(canvas){
  const heroImages=Object.fromEntries(['shell','canvas','leather','cordura'].map(kind=>[kind,image('assets/hiker-'+kind+'.webp')]));
  const heroPatterns={};
  let grassPattern,dirtPattern;
- const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,detained=false,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
+ const render=({route,d,mode='walk',moving=false,seconds=0,orbit=0,look=0,viewpoint=false,camping=false,pickup=null,hazard=null,damage=false,pets=[],companion,clothing='trail',clothingPreview=false,socialGuests=null,detained=false,bathSite=null,offset=0,speed=0,actualSpeed=0,viewDirection=actualSpeed<0?-1:1,jump=null,action='',actionTime=0,actionDuration=8,steer=0,reduced=false,clock=450,weather=E.weather(clock)})=>{
   if(action||clothingPreview)mode='walk';
-  const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35);
+  const frameGap=lastFrame===null?.033:seconds-lastFrame,dt=cap(frameGap,0,.08);lastFrame=seconds;
+  if(frameGap>0&&frameGap<.18)frameAverage=mix(frameAverage,frameGap,.09);
+  if(qualityCheck===null)qualityCheck=seconds;
+  if(!clothingPreview&&seconds-qualityCheck>.7){
+   if(frameAverage>.051)densityScale=Math.max(.77,densityScale-.07);
+   else if(frameAverage<.029)densityScale=Math.min(1,densityScale+.04);
+   qualityCheck=seconds;
+  }
+  const size=canvas.getBoundingClientRect(),density=cap(globalThis.devicePixelRatio||1,1,1.35)*(clothingPreview?1:densityScale);
   const W=cap(Math.round(size.width*density),280,1150),H=cap(Math.round(size.height*density),220,850);
   if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}
   const base=E.sample(route,d), a=E.sample(route,d-4),b=E.sample(route,d+9);
   const direction=Math.atan2(b.x-a.x,b.z-a.z);
   const pos=E.roadPoint(route,d,offset);
   if(Math.abs(offset)>3.5)pos.h=Math.max(base.h-.2,land(pos.x,pos.z));
+  const shower=action==='shower',washing=shower||action==='bath';
+  const washSite=shower?'shower':bathSite;
+  const basin=washSite?E.roadPoint(route,d,shower?-5.1:7.4):null;
+  if(basin)basin.h=land(basin.x,basin.z)+.15;
+  let steppingToWater=false,washTime=0;
+  if(washing&&basin){
+   const approach=2.4, remaining=actionDuration-actionTime;
+   const entry=smooth(cap(actionTime/approach,0,1))*smooth(cap(remaining/approach,0,1));
+   steppingToWater=actionTime<approach||remaining<approach;
+   washTime=Math.max(0,actionTime-approach);
+   const shallow=E.roadPoint(route,d,shower?-5.1:5.85);
+   pos.x=mix(pos.x,shallow.x,entry);pos.z=mix(pos.z,shallow.z,entry);
+   pos.h=mix(pos.h,basin.h-(shower?0:.28),entry);
+  }
   const dx=actorPosition?pos.x-actorPosition.x:0,dz=actorPosition?pos.z-actorPosition.z:0,distance=Math.hypot(dx,dz);
   actorPosition=pos;
-  const dt=lastFrame===null?.033:cap(seconds-lastFrame,0,.08);lastFrame=seconds;
   const weatherMix=(current,next)=>current===null?next:mix(current,next,1-Math.exp(-dt*2.4));
   const minute=clock%1440,dusk=Math.max(1-cap((minute-300)/125,0,1),cap((minute-1020)/125,0,1));
   wet=weatherMix(wet,weather.mud);rain=weatherMix(rain,weather.kind==='rain'?1:0);
@@ -201,8 +223,20 @@ function attach(canvas){
   const travelBearing=direction+(viewDirection<0?Math.PI:0);
   const target=travelBearing+orbit+(clothingPreview?0:mode==='walk'?.32:mode==='cart'?.24:0);
   angle=angular(angle,target,1-Math.exp(-dt*5.5));
-  const facing=mode==='walk'&&moving&&distance>.001?Math.atan2(dx,dz):travelBearing;
-  actorYaw=angular(actorYaw,facing+(mode==='walk'?0:steer*.31),1-Math.exp(-dt*10));
+  const facing=mode==='walk'&&(moving||steppingToWater)&&distance>.001?Math.atan2(dx,dz):travelBearing;
+  const wantedYaw=facing+(mode==='walk'?0:steer*.31);
+  let turnDelta=0;
+  if(actorYaw===null)actorYaw=wantedYaw;
+  else{
+   const difference=Math.atan2(Math.sin(wantedYaw-actorYaw),Math.cos(wantedYaw-actorYaw));
+   const targetYawRate=cap(difference*10,-5.8,5.8);
+   yawVelocity=mix(yawVelocity,targetYawRate,1-Math.exp(-dt*18));
+   turnDelta=yawVelocity*dt;
+   if(Math.sign(turnDelta)===Math.sign(difference)&&Math.abs(turnDelta)>Math.abs(difference)){
+    turnDelta=difference;yawVelocity=0;
+   }
+   actorYaw+=turnDelta;
+  }
   const heading=actorYaw,fx=Math.sin(angle),fz=Math.cos(angle),rx=fz,rz=-fx;
   const follow=clothingPreview?4.9:viewpoint?-27:mode==='cart'?13:mode==='car'?10.1:mode==='walk'?8.65:8.6;
   const want={x:pos.x-fx*follow+rx*.29,h:pos.h+(clothingPreview?2.32:viewpoint?11:mode==='cart'?4.25:mode==='car'?3.65:3.28),z:pos.z-fz*follow+rz*.29};
@@ -211,8 +245,9 @@ function attach(canvas){
   else{const a=1-Math.exp(-dt*12);camera={x:mix(camera.x,want.x,a),h:mix(camera.h,want.h,a*.82),z:mix(camera.z,want.z,a)};}
   zoom=mix(zoom,reduced?1:1-cap(Math.abs(actualSpeed)/100,0,.5)*.14,1-Math.exp(-dt*3));
   wheelAngle+=actualSpeed*dt/.42;
-  const cam=camera,pitch=.08-look,cp=Math.cos(pitch),sp=Math.sin(pitch),focal=Math.min(W*.91,H*1.07)*zoom,horizon=H*.43;
-  const skyShift=look*focal*.94;
+  cameraLook=cameraLook===null?look:mix(cameraLook,look,1-Math.exp(-dt*9));
+  const cam=camera,pitch=.08-cameraLook,cp=Math.cos(pitch),sp=Math.sin(pitch),focal=Math.min(W*.91,H*1.07)*zoom,horizon=H*.43;
+  const skyShift=cameraLook*focal*.94;
   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#5b9fae');bg.addColorStop(.38,'#b3d0c3');bg.addColorStop(.62,'#f3e8bb');bg.addColorStop(1,'#9eb389');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
   if(panorama?.naturalWidth){
    const plate=(bitmap,opacity,y)=>{
@@ -309,7 +344,7 @@ function attach(canvas){
     uv:pattern?clipped.map(p=>[p[3],p[4]]):null});
   }
   function heroFace(points,color,light,_bias,material){
-   face(points,color,light,-1.8,heroPatterns[material?.kind],material,1,clothingPreview);
+   face(points,color,light,-1.8,heroPatterns[material?.kind],material,1,true);
   }
   function billboard(bitmap,p,height,{sway=0,flip=false,opacity=1}={}){
    if(!bitmap?.naturalWidth)return false;
@@ -435,7 +470,56 @@ function attach(canvas){
    const top=q.map(v=>add(v,0,h,0));face(top,c,1.13,bias);
    for(let i=0;i<4;i++){const j=(i+1)%4;face([q[i],q[j],top[j],top[i]],c,[.79,.93,.70,.88][i],bias);}
   }
+  if(basin&&!shower){
+   const radii=washSite==='lake'?[4.4,6.4]:washSite==='pond'?[3.3,3.75]:[2.25,6.1];
+   const c=Math.cos(direction),s=Math.sin(direction);
+   const surface=(a,r,h=0)=>{
+    const bend=1+Math.sin(a*3+.7)*.067+Math.cos(a*5)*.035;
+    const z=Math.sin(a)*radii[1]*r*bend;
+    const x=Math.cos(a)*radii[0]*r*bend+(washSite==='stream'?Math.sin(z*.76)*.53:0);
+    return add(basin,x*c+z*s,h,z*c-x*s);
+   };
+   const ring=(r,h)=>Array.from({length:24},(_,i)=>surface(i*TAU/24,r,h));
+   layer=1.32;
+   face(ring(1.07,-.006),[80,103,77],.95,-.08);
+   face(ring(.97,.008),washSite==='pond'?[95,139,103]:[62,143,140],1,-.14);
+   face(ring(.77,.016),[74,153,147],.99,-.20,null,null,.55);
+   const rippleTime=reduced?0:seconds;
+   for(let i=0;i<19;i++){
+    const a=i*2.1+rippleTime*(washSite==='stream'?.75:.18),r=.14+rand(i+11)*.76;
+    face([surface(a,r,.027),surface(a+.11,r+.013,.027),surface(a+.22,r,.027),surface(a+.11,r-.009,.027)],[179,212,186],1,-.27,null,null,.38+rand(i+1)*.22);
+   }
+   layer=2;
+   for(let i=0;i<14;i++){
+    const p=surface(i*TAU/14+rand(i)*.15,1.02),r=.22+rand(i)*.26;
+    if(Math.hypot(p.x-base.x,p.z-base.z)<3.6)continue;
+    const rim=Array.from({length:6},(_,j)=>add(p,Math.sin(j*TAU/6)*r,-.045,Math.cos(j*TAU/6)*r*.79));
+    const crown=add(p,r*.18,r*(.44+rand(i+3)*.3),-r*.1);
+    for(let j=0;j<rim.length;j++)face([rim[j],rim[(j+1)%rim.length],crown],[129,132,112],.77+.075*j,-.12);
+   }
+  }else if(shower&&basin){
+   box(basin,2.35,.14,2.36,direction,[112,114,91],-.06,-.1);
+   const side=E.roadPoint(route,d,-6.2);
+   const screen={...side,h:basin.h};
+   box(screen,.12,2.8,2.4,direction,[154,110,76],0,-.05);
+   const pole=add(basin,.65,0,.42);
+   box(pole,.094,2.9,.10,direction,[102,118,111]);
+   box(add(pole,-.26,2.83,0),.55,.076,.11,direction,[135,151,140]);
+   if(!reduced)for(let i=0;i<18;i++){
+    const y=2.74-(seconds*(2+rand(i))+rand(i*13)*2.7)%2.65;
+    const p=add(basin,(rand(i*7)-.5)*.84,y,(rand(i*3)-.5)*.76);
+    face([p,add(p,.023,-.18,0),add(p,-.024,-.10,.018)],[180,214,205],1,-1,null,null,.64);
+   }
+  }
+  if(action==='bath'&&!steppingToWater&&!reduced&&basin){
+   for(let i=0;i<10;i++){
+    const age=(seconds*.9+rand(i*13))%1,a=i*2.4+seconds;
+    const p=add(pos,Math.cos(a)*age*.93,.24+Math.sin(age*Math.PI)*.83,Math.sin(a)*age*.93);
+    face([p,add(p,.033,-.085,.015),add(p,-.023,-.048,.027)],[188,224,209],1.05,-1.1,null,null,.72);
+   }
+  }
   for(const p of verge){
+   if(basin&&!shower&&Math.hypot(p.x-basin.x,p.z-basin.z)<2.7)continue;
    const dx=p.x-cam.x,dz=p.z-cam.z,depth=dx*fx+dz*fz;
    if(depth<0||depth>63||Math.abs(dx*rx+dz*rz)>depth*.9+5)continue;
    if(p.stone){
@@ -607,8 +691,8 @@ function attach(canvas){
     box(shift(pos,0,0,.79),.69,.077,.074,heading,[75,81,65],1.11,-1.5);
    }
    const scale=mode==='walk'?1.20:1;
-   const pose=actor.pose({moving,mode,speed,actualSpeed,distance,scale,jump,seconds,dt,action,actionTime,turn:steer,reduced,trekking:clothing!=='trail'});
-   const grade=E.grade(route,d)*Math.cos(direction-heading);
+   const pose=actor.pose({moving:moving||steppingToWater,mode,speed,actualSpeed:steppingToWater&&dt?distance/dt:actualSpeed,distance,scale,jump,seconds,dt,action:steppingToWater?'':action,actionTime:washing?washTime:actionTime,turn:steer,turnDelta,reduced,trekking:clothing!=='trail'});
+   const grade=washing?0:E.grade(route,d)*Math.cos(direction-heading);
    const footing=mode==='walk'?.14:0;
    const lift=E.jumpHeight(jump);
    WindHiker.draw(heroFace,([x,y,z])=>shift(pos,x*scale,(y+z*grade)*scale+footing+lift,z*scale),pose,mode,damage,undefined,actorOptions);
@@ -706,7 +790,7 @@ function attach(canvas){
    const bx=(du1*(x2-x0)-du2*(x1-x0))/determinant;
    const by=(du1*(y2-y0)-du2*(y1-y0))/determinant;
    ctx.save();
-   if(f.material)ctx.globalAlpha=.8;
+   if(f.material)ctx.globalAlpha=f.material==='shell'?.14:.24;
    else ctx.globalAlpha=cap((48-f.depth)/22,0,.82)*(f.layer===1?1-wet*.60:1);
    ctx.transform(ax,ay,bx,by,x0-ax*u0-bx*v0,y0-ay*u0-by*v0);
    ctx.fillStyle=f.pattern;ctx.fill();
@@ -735,7 +819,7 @@ function attach(canvas){
     ctx.globalAlpha=f.opacity;ctx.fill();ctx.globalAlpha=1;
    }else{
     ctx.fill();
-    if(f.layer<=1.5||f.closeMesh){ctx.strokeStyle=f.color;ctx.lineWidth=f.closeMesh?.70:.53;ctx.stroke();}
+    if(f.layer<=1.5||f.closeMesh){ctx.strokeStyle=f.color;ctx.lineWidth=f.closeMesh?.95:.53;ctx.stroke();}
    }
    if(f.pattern)drawMaterial(f);
   }
@@ -765,7 +849,7 @@ function attach(canvas){
    ctx.fillText(caption,W*.5,top+18);
   }
  };
- return {render,reset:()=>{angle=null;camera=null;actorYaw=null;actorPosition=null;lastFrame=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;actor.reset();follower.reset();}};
+ return {render,reset:()=>{angle=null;camera=null;cameraLook=null;actorYaw=null;actorPosition=null;yawVelocity=0;lastFrame=null;qualityCheck=null;wet=null;rain=null;heat=null;dark=null;zoom=1;wheelAngle=0;actor.reset();follower.reset();}};
 }
 return {attach,land};
 })();

@@ -52,6 +52,10 @@ assert(steady.some((p,i)=>{
  if(!previous||p.feet[0]!==0||previous.feet[0]!==0)return false;
  return Math.abs(p.legs[0][2][2]-previous.legs[0][2][2]+2.5/60)<.002;
 }),'In flat stance the foot should move back by the same distance the body moves forward');
+const stopping=rig.pose({dt:1/60});
+const settled=Array.from({length:28},()=>rig.pose({dt:1/60}));
+assert(Math.abs(stopping.legs[0][2][2]-gait.at(-1).legs[0][2][2])<.04);
+assert.deepEqual(settled.at(-1).legs[0][2],settled.at(-2).legs[0][2]);
 assert(E.jumpHeight(.5)>1 && E.jumpHeight(null)===0 && E.jumpHeight(1)===0);
 assert(rig.pose({trekking:true}).poles);
 assert(!rig.pose({trekking:true,mode:'bike'}).poles);
@@ -73,11 +77,18 @@ Rig.draw((vertices,color)=>{
 assert(defaultColors.has('218,113,29'),'The default hiker wears the reference orange jacket');
 assert(defaultColors.has('43,64,70'),'The chest camera has a modeled glass lens');
 assert(rest.legs[0][0][1]<tank.legs[0][0][1]-.4);
-for(const action of ['fish','reel','meal','drink','rest','photo']){
+for(const action of ['fish','reel','meal','snack','drink','rest','photo','bath','shower']){
  rig.reset();
  const p=Array.from({length:28},(_,i)=>rig.pose({action,actionTime:i/30,seconds:2+i/30})).at(-1);
  let faces=0;Rig.draw((vertices)=>{check(...vertices.flat());faces++},v=>v,p,'walk');
  assert(faces>650);assert.equal(p.action,action);assert(p.activity>.85);
+ if(action==='bath'||action==='shower')assert(p.washing>.85);
+ if(action==='drink')assert(p.sip>.85);
 }
+for(const [at,bathSite] of ['lake','stream','pond'].entries()){
+ scene.reset();
+ for(const actionTime of [.2,1.5,4])scene.render({route:E.profile(at,at+1),d:0,bathSite,action:'bath',actionTime,seconds:actionTime});
+}
+scene.render({route:E.profile(4,5),d:0,action:'shower',actionTime:1.5,seconds:5.5});
 
 console.log('OK: 3D geometry and all vehicle modes; uphill/downhill, hunger, thirst, energy, health, damage and ETA.');
